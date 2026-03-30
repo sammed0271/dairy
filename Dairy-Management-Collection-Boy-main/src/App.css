@@ -1,0 +1,14 @@
+/* src/App.css */
+
+/* Example small utilities; keep or remove as you like */
+
+.app-card {
+  border-radius: 0.75rem;
+  background-color: #ffffff;
+  border: 1px solid #E9E2C8;
+  padding: 1.5rem;
+}
+
+.app-shadow {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
