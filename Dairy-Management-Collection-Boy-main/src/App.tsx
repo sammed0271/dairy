@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import Loader from "./components/loader";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import RoleRoute from "./routes/RoleRoute";
 
 const MainLayout = lazy(() => import("./layout/mainLayout"));
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
@@ -13,13 +14,19 @@ const AddFarmerPage = lazy(() => import("./pages/farmers/addFarmer"));
 const MilkEntryPage = lazy(() => import("./pages/milkCollection/milkEntry"));
 const DeductionListPage = lazy(() => import("./pages/deduction/deductionList"));
 const AddDeductionPage = lazy(() => import("./pages/deduction/addDeduction"));
-const InventoryListPage = lazy(() => import("./pages/inventory/inventoryList"));
-const AddInventoryPage = lazy(() => import("./pages/inventory/addInventory"));
+const InventoryListPage = lazy(
+  () => import("./modules/inventory/pages/InventoryListPage"),
+);
+const AddInventoryPage = lazy(
+  () => import("./modules/inventory/pages/AddInventoryPage"),
+);
 const BonusManagementPage = lazy(() => import("./pages/bonus/bonusManagement"));
 const RateChartPage = lazy(() => import("./pages/rateChart/rateChart"));
 const DailyReportPage = lazy(() => import("./pages/reports/dailyReport"));
 const MonthlyReportPage = lazy(() => import("./pages/reports/monthlyReport"));
-const BillManagementPage = lazy(() => import("./pages/bills/billManagement"));
+const BillManagementPage = lazy(
+  () => import("./modules/billing/pages/BillManagementPage"),
+);
 const MilkYieldReportPage = lazy(
   () => import("./pages/reports/milkYieldReport"),
 );
@@ -27,7 +34,23 @@ const BillingReportPage = lazy(() => import("./pages/reports/billingReport"));
 const InventoryReportPage = lazy(
   () => import("./pages/reports/inventoryReport"),
 );
-const Settings = lazy(() => import("./components/Settings"));
+const FarmerPaymentReportPage = lazy(
+  () => import("./pages/reports/farmerPaymentReport"),
+);
+const MilkQualityReportPage = lazy(
+  () => import("./pages/reports/milkQualityReport"),
+);
+const AuditTrailReportPage = lazy(
+  () => import("./pages/reports/auditTrailReport"),
+);
+const SettingsPage = lazy(
+  () => import("./modules/settings/pages/SettingsPage"),
+);
+const CentresPage = lazy(() => import("./pages/centres/centresPage"));
+const AdminsPage = lazy(() => import("./pages/admins/adminsPage"));
+const PaymentsPage = lazy(
+  () => import("./modules/payments/pages/PaymentsPage"),
+);
 
 export const ReportsLayout = () => <Outlet />;
 
@@ -48,19 +71,13 @@ const App: React.FC = () => {
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route element={<RoleRoute allowedRoles={["superadmin"]} />}>
+              <Route path="/centres" element={<CentresPage />} />
+              <Route path="/admins" element={<AdminsPage />} />
+            </Route>
             <Route path="/farmers" element={<FarmerListPage />} />
             <Route path="/farmers/add" element={<AddFarmerPage />} />
-            <Route
-              path="/settings"
-              element={
-                <Settings
-                  isOpen={false}
-                  onClose={function (): void {
-                    throw new Error("Function not implemented.");
-                  }}
-                />
-              }
-            />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/milk-collection" element={<MilkEntryPage />} />
             <Route path="/deduction" element={<DeductionListPage />} />
             <Route path="/deduction/add" element={<AddDeductionPage />} />
@@ -75,10 +92,14 @@ const App: React.FC = () => {
               <Route path="daily" element={<DailyReportPage />} />
               <Route path="milk-yield" element={<MilkYieldReportPage />} />
               <Route path="billing" element={<BillingReportPage />} />
+              <Route path="farmer-payments" element={<FarmerPaymentReportPage />} />
+              <Route path="milk-quality" element={<MilkQualityReportPage />} />
+              <Route path="audit-trail" element={<AuditTrailReportPage />} />
               <Route path="inventory" element={<InventoryReportPage />} />
             </Route>
 
             <Route path="/bills" element={<BillManagementPage />} />
+            <Route path="/payments" element={<PaymentsPage />} />
           </Route>
         </Route>
 

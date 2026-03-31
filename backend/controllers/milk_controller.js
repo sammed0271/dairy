@@ -1,86 +1,33 @@
 import Milk from "../models/Milk.js";
-import Farmer from "../models/Farmer.js";
-import RateChart from "../models/RateChart.js";
 import { logAudit } from "../services/auditService.js";
+import { createMilkEntry } from "../services/milkEntryService.js";
 import { getScopedFilter } from "../utils/access.js";
 
 export const addMilkEntry = async (req, res) => {
   try {
-    const { farmerId, date, shift, quantity, fat, snf, milkType, clientGeneratedId } = req.body;
-
-    if (
-      !farmerId ||
-      !date ||
-      !shift ||
-      quantity === undefined ||
-      fat === undefined ||
-      snf === undefined
-    ) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-
-    const farmer = await Farmer.findOne(getScopedFilter(req, { _id: farmerId }));
-    if (!farmer) {
-      return res.status(400).json({ message: "Invalid farmer" });
-    }
-
-    // const milkType = farmer.milkType.toLowerCase();
-    if (!farmer.milkType.includes(milkType)) {
-      return res.status(400).json({
-        message: "Selected milk type not allowed for this farmer",
-      });
-    }
-
-    // 1. Find applicable rate chart by date
-    const chart = await RateChart.findOne({
-      milkType,
-      effectiveFrom: { $lte: date },
-    }).sort({ effectiveFrom: -1 });
-
-    if (!chart) {
-      return res.status(400).json({
-        message: "No rate chart found for this date",
-      });
-    }
-
-    // 2. Find rate from FAT/SNF matrix
-    const fatIndex = chart.fats.indexOf(Number(fat));
-    const snfIndex = chart.snfs.indexOf(Number(snf));
-
-    if (fatIndex === -1 || snfIndex === -1) {
-      return res.status(400).json({
-        message: "Rate not defined for this FAT/SNF",
-      });
-    }
-
-    const rate = chart.rates[fatIndex][snfIndex];
-    const totalAmount = Number(quantity) * rate;
-
-    // 3. Save milk entry
-    const milk = await Milk.create({
-      centreId: farmer.centreId ?? req.user?.centreId ?? null,
-      farmerId,
-      date,
-      shift,
-      milkType,
-      quantity,
-      fat,
-      snf,
-      rate,
-      totalAmount,
-      clientGeneratedId: clientGeneratedId || null,
-    });
-
-    await logAudit({
+    const { milk, created } = await createMilkEntry({
       req,
-      centreId: milk.centreId,
-      action: "milk_entry_created",
-      entityType: "Milk",
-      entityId: milk._id,
-      details: { farmerId, date, shift, milkType },
+      payload: req.body,
     });
 
-    res.status(201).json(milk);
+    if (created) {
+      await logAudit({
+        req,
+        centreId: milk.centreId,
+        action: "milk_entry_created",
+        entityType: "Milk",
+        entityId: milk._id,
+        details: {
+          farmerId: req.body.farmerId,
+          date: req.body.date,
+          shift: req.body.shift,
+          milkType: req.body.milkType,
+          clientGeneratedId: req.body.clientGeneratedId || null,
+        },
+      });
+    }
+
+    res.status(created ? 201 : 200).json(milk);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
@@ -89,7 +36,9 @@ export const addMilkEntry = async (req, res) => {
     }
 
     console.error("Add milk failed:", err);
-    res.status(500).json({ message: "Failed to save milk entry" });
+    res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to save milk entry" });
   }
 };
 

@@ -7,10 +7,11 @@ export type AddMilkRequest = {
   shift: "morning" | "evening";
   farmerId: string;
   quantity: number;
-    milkType: MilkType;
+  milkType: MilkType;
   fat: number;
   snf: number;
   rate: number;
+  clientGeneratedId?: string;
 };
 
 export const getRateForMilk = (params: {

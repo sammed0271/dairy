@@ -14,10 +14,12 @@ export const getBills = async (req, res) => {
   try {
     const bills = await Bill.find(getScopedFilter(req))
       .populate("farmerId", "name code")
+      .populate("centreId", "name code")
       .sort({ createdAt: -1 });
 
     const formatted = bills.map((b, index) => {
       const farmer = b.farmerId;
+      const centre = b.centreId;
 
       return {
         _id: b._id,
@@ -25,6 +27,13 @@ export const getBills = async (req, res) => {
         farmerId: farmer?._id ?? null,
         farmerName: farmer?.name ?? "Deleted Farmer",
         farmerCode: farmer?.code ?? "-",
+        centreId: centre
+          ? {
+              _id: centre._id,
+              name: centre.name,
+              code: centre.code,
+            }
+          : null,
         periodFrom: b.periodFrom,
         periodTo: b.periodTo,
         totalLiters: b.totalLiters ?? 0,

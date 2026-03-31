@@ -15,6 +15,14 @@ export const ROUTES = {
     label: "Dashboard",
   },
 
+  centres: {
+    list: { path: "/centres", label: "Centres" },
+  },
+
+  admins: {
+    list: { path: "/admins", label: "Admins" },
+  },
+
   farmers: {
     list: { path: "/farmers", label: "Farmers" },
     add: { path: "/farmers/add", label: "Add Farmer" },
@@ -34,6 +42,10 @@ export const ROUTES = {
     list: { path: "/bills", label: "Bills" },
   },
 
+  payments: {
+    list: { path: "/payments", label: "Payments" },
+  },
+
   bonus: {
     manage: { path: "/bonus", label: "Bonus Management" },
   },
@@ -51,17 +63,25 @@ export const ROUTES = {
     daily: { path: "/reports/daily", label: "Daily Report" },
     monthly: { path: "/reports/monthly", label: "Monthly Report" },
   },
+
+  settings: {
+    manage: { path: "/settings", label: "Settings" },
+  },
 } as const;
 
 // Convenience array for sidebar, if you want to generate it dynamically.
 export const SIDEBAR_ITEMS: RoutePathConfig[] = [
   ROUTES.dashboard,
+  ROUTES.centres.list,
+  ROUTES.admins.list,
   ROUTES.farmers.list,
   ROUTES.milkCollection.list,
   ROUTES.deduction.list,
   ROUTES.bills.list,
+  ROUTES.payments.list,
   ROUTES.bonus.manage,
   ROUTES.rateChart.manage,
   ROUTES.inventory.list,
   ROUTES.reports.daily,
+  ROUTES.settings.manage,
 ];

@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InputField from "../../components/inputField";
-// import SelectField from "../../components/selectField";
+import { useSyncContext } from "../../context/SyncContext";
+import { dbPut, STORE_NAMES } from "../../storage/indexDb";
 import type { InventoryItem } from "../../types/inventory";
 import { addInventoryItem, getInventoryItems } from "../../axios/inventory_api";
 import toast from "react-hot-toast";
@@ -15,8 +16,15 @@ function generateNextCode(items: InventoryItem[]): string {
   return `I${String(next).padStart(3, "0")}`;
 }
 
+const buildClientGeneratedId = () =>
+  `inventory-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const isNetworkFailure = (error: unknown) =>
+  typeof error === "object" && error !== null && !("response" in error);
+
 const AddInventoryPage: React.FC = () => {
   const navigate = useNavigate();
+  const { getCachedInventory, isOnline, queueInventoryCreate } = useSyncContext();
 
   const [code, setCode] = useState<string>("");
 
@@ -38,11 +46,23 @@ const AddInventoryPage: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      const res = await getInventoryItems();
-      setCode(generateNextCode(res.data));
+      try {
+        if (isOnline) {
+          const res = await getInventoryItems();
+          setCode(generateNextCode(res.data));
+          return;
+        }
+
+        const cachedItems = await getCachedInventory();
+        setCode(generateNextCode(cachedItems));
+      } catch (error) {
+        console.error("Failed to load inventory codes:", error);
+        const cachedItems = await getCachedInventory();
+        setCode(generateNextCode(cachedItems));
+      }
     };
-    load();
-  }, []);
+    void load();
+  }, [getCachedInventory, isOnline]);
 
   const validate = () => {
     const next: typeof errors = {};
@@ -78,7 +98,7 @@ const AddInventoryPage: React.FC = () => {
     try {
       setSaving(true);
 
-      await addInventoryItem({
+      const payload = {
         name: name.trim(),
         category,
         unit: unit.trim(),
@@ -86,13 +106,93 @@ const AddInventoryPage: React.FC = () => {
         minStock: parseFloat(minStock) || 0,
         purchaseRate: purchaseRate ? parseFloat(purchaseRate) : undefined,
         sellingRate: sellingRate ? parseFloat(sellingRate) : undefined,
+      };
+
+      if (!isOnline) {
+        const clientGeneratedId = buildClientGeneratedId();
+        const localId = `offline-${clientGeneratedId}`;
+        const now = new Date().toISOString();
+        const queuedItem: InventoryItem = {
+          _id: localId,
+          code: code || "I---",
+          name: payload.name,
+          category: payload.category,
+          unit: payload.unit,
+          currentStock: payload.openingStock,
+          minStock: payload.minStock,
+          purchaseRate: payload.purchaseRate,
+          sellingRate: payload.sellingRate,
+          updatedAt: now,
+          lastUpdated: now.slice(0, 10),
+          clientGeneratedId,
+          syncStatus: "pending",
+        };
+
+        await queueInventoryCreate({
+          item: queuedItem,
+          payload: {
+            ...payload,
+            clientGeneratedId,
+            localId,
+          },
+        });
+
+        toast.success("Saved offline. Inventory item will sync automatically.");
+        navigate("/inventory");
+        return;
+      }
+
+      const response = await addInventoryItem(payload);
+      await dbPut(STORE_NAMES.inventory, {
+        ...response.data,
+        syncStatus: "synced",
       });
       toast.success("Inventory item added successfully");
 
       navigate("/inventory");
     } catch (err) {
       console.error("Failed to add inventory item:", err);
-      toast.error("Failed to save inventory item");
+
+      if (isNetworkFailure(err)) {
+        const clientGeneratedId = buildClientGeneratedId();
+        const localId = `offline-${clientGeneratedId}`;
+        const now = new Date().toISOString();
+        const queuedItem: InventoryItem = {
+          _id: localId,
+          code: code || "I---",
+          name: name.trim(),
+          category,
+          unit: unit.trim(),
+          currentStock: parseFloat(openingStock) || 0,
+          minStock: parseFloat(minStock) || 0,
+          purchaseRate: purchaseRate ? parseFloat(purchaseRate) : undefined,
+          sellingRate: sellingRate ? parseFloat(sellingRate) : undefined,
+          updatedAt: now,
+          lastUpdated: now.slice(0, 10),
+          clientGeneratedId,
+          syncStatus: "pending",
+        };
+
+        await queueInventoryCreate({
+          item: queuedItem,
+          payload: {
+            name: name.trim(),
+            category,
+            unit: unit.trim(),
+            openingStock: parseFloat(openingStock) || 0,
+            minStock: parseFloat(minStock) || 0,
+            purchaseRate: purchaseRate ? parseFloat(purchaseRate) : undefined,
+            sellingRate: sellingRate ? parseFloat(sellingRate) : undefined,
+            clientGeneratedId,
+            localId,
+          },
+        });
+
+        toast.success("Network unavailable. Inventory item saved offline.");
+        navigate("/inventory");
+      } else {
+        toast.error("Failed to save inventory item");
+      }
     } finally {
       setSaving(false);
     }

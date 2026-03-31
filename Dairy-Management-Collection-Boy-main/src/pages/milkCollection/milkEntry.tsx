@@ -1,9 +1,6 @@
-// src/pages/milkCollection/milkEntry.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { debounce } from "lodash";
-import InputField from "../../components/inputField";
-import Loader from "../../components/loader";
-
+import toast from "react-hot-toast";
 import { getFarmers } from "../../axios/farmer_api";
 import {
   addMilkEntry,
@@ -11,19 +8,18 @@ import {
   getMilkEntries,
   getRateForMilk,
 } from "../../axios/milk_api";
-import MilkContainer from "./MilkContainer";
-
-import type { MilkCollection, MilkShift } from "../../types/milkCollection";
-import type { Farmer, MilkType } from "../../types/farmer";
-import toast from "react-hot-toast";
 import ConfirmModal from "../../components/confirmModal";
+import InputField from "../../components/inputField";
+import Loader from "../../components/loader";
+import { useSyncContext } from "../../context/SyncContext";
+import type { Farmer, MilkType } from "../../types/farmer";
+import type { MilkCollection, MilkShift } from "../../types/milkCollection";
+import MilkContainer from "./MilkContainer";
 
 type DateFilterMode = "day" | "range" | "all";
 
 const getDefaultShift = (): MilkShift => {
-  const now = new Date();
-  const hour = now.getHours(); // 0–23
-
+  const hour = new Date().getHours();
   return hour < 12 ? "morning" : "evening";
 };
 
@@ -32,38 +28,56 @@ const addDays = (dateString: string, days: number) => {
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
 };
+
+const buildClientGeneratedId = () =>
+  `milk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const isNetworkFailure = (error: unknown) =>
+  typeof error === "object" && error !== null && !("response" in error);
+
 const MilkEntryPage: React.FC = () => {
+  const {
+    getCachedFarmers,
+    getCachedMilkEntries,
+    isOnline,
+    isSyncing,
+    lastSyncTime,
+    pendingCount,
+    queueMilkEntry,
+    syncNow,
+  } = useSyncContext();
+
   const today = useMemo(() => new Date(), []);
   const todayISO = useMemo(() => today.toISOString().slice(0, 10), [today]);
-  const [inputValue, setInputValue] = useState("");
+  const tenDaysAgo = useMemo(() => {
+    const value = new Date(today);
+    value.setDate(value.getDate() - 9);
+    return value.toISOString().slice(0, 10);
+  }, [today]);
 
-  // Farmers
   const [farmers, setFarmers] = useState<Farmer[]>([]);
-  const [loadingFarmers, setLoadingFarmers] = useState(true);
-
-  // Collections
   const [collections, setCollections] = useState<MilkCollection[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
-  // Form state
-  const [date, setDate] = useState<string>(todayISO);
-  const [shift, setShift] = useState<MilkShift>(() => getDefaultShift());
-  const [farmerId, setFarmerId] = useState<string>("");
-  const [liters, setLiters] = useState<string>("");
-  const [fat, setFat] = useState<string>("");
-  const [snf, setSnf] = useState<string>("");
-  const [rate, setRate] = useState<string>("0.00");
-  const [loadingRate, setLoadingRate] = useState(false);
+  const [date, setDate] = useState(todayISO);
+  const [shift, setShift] = useState<MilkShift>(getDefaultShift());
+  const [farmerId, setFarmerId] = useState("");
+  const [liters, setLiters] = useState("");
+  const [fat, setFat] = useState("");
+  const [snf, setSnf] = useState("");
+  const [rate, setRate] = useState("0.00");
   const [milkType, setMilkType] = useState<MilkType | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<MilkCollection | null>(null);
+  const [remarks, setRemarks] = useState("");
+  const [inputValue, setInputValue] = useState("");
   const [farmerSearch, setFarmerSearch] = useState("");
-  const [remarks, setRemarks] = useState<string>("");
+  const [loadingRate, setLoadingRate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MilkCollection | null>(null);
 
-  const tenDaysAgo = new Date();
-  tenDaysAgo.setDate(today.getDate() - 9);
-
-  const format = (d: Date) => d.toISOString().slice(0, 10);
-  const [fromDate, setFromDate] = useState(format(tenDaysAgo));
-  const [toDate, setToDate] = useState(format(today));
+  const [filterMode, setFilterMode] = useState<DateFilterMode>("day");
+  const [filterDate, setFilterDate] = useState(todayISO);
+  const [fromDate, setFromDate] = useState(tenDaysAgo);
+  const [toDate, setToDate] = useState(todayISO);
 
   const [errors, setErrors] = useState<{
     date?: string;
@@ -71,74 +85,85 @@ const MilkEntryPage: React.FC = () => {
     liters?: string;
     fat?: string;
     snf?: string;
-    rate?: string;
   }>({});
-  const [saving, setSaving] = useState(false);
-
-  // Filter state for list
-  const [filterMode, setFilterMode] = useState<DateFilterMode>("day");
-  const [filterDate, setFilterDate] = useState<string>(todayISO);
-  // const [filterMonth, setFilterMonth] = useState<string>(todayMonth);
-  // const [filterFrom, setFilterFrom] = useState<string>(todayISO);
-  // const [filterTo, setFilterTo] = useState<string>(todayISO);
 
   const selectedFarmer = useMemo(
-    () => farmers.find((f) => f._id === farmerId),
+    () => farmers.find((farmer) => farmer._id === farmerId),
     [farmers, farmerId],
   );
 
   const activeFarmers = useMemo(
-    () => farmers.filter((f) => f.status === "Active"),
+    () => farmers.filter((farmer) => farmer.status === "Active"),
     [farmers],
   );
 
   const filteredFarmers = useMemo(() => {
-    if (!farmerSearch.trim()) return [];
+    if (!farmerSearch.trim()) {
+      return [];
+    }
 
-    const q = farmerSearch.toLowerCase();
-
+    const query = farmerSearch.toLowerCase();
     return activeFarmers.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) || f.code.toLowerCase().includes(q),
+      (farmer) =>
+        farmer.name.toLowerCase().includes(query) ||
+        farmer.code.toLowerCase().includes(query),
     );
   }, [activeFarmers, farmerSearch]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [farmerRes, milkRes] = await Promise.all([
+  const loadData = React.useCallback(async () => {
+    setLoadingData(true);
+    try {
+      if (isOnline) {
+        const [farmersResponse, milkResponse] = await Promise.all([
           getFarmers(),
           getMilkEntries(),
         ]);
 
-        setFarmers(farmerRes.data);
-        setCollections(milkRes.data);
-      } catch (err) {
-        console.error("Failed to load data:", err);
-        toast.error("Failed to load farmers or milk entries");
-      } finally {
-        setLoadingFarmers(false);
+        setFarmers(farmersResponse.data);
+        setCollections(
+          milkResponse.data.map((entry) => ({
+            ...entry,
+            syncStatus: "synced",
+          })),
+        );
+      } else {
+        const [cachedFarmers, cachedCollections] = await Promise.all([
+          getCachedFarmers(),
+          getCachedMilkEntries(),
+        ]);
+        setFarmers(cachedFarmers);
+        setCollections(cachedCollections);
       }
-    };
-
-    load();
-  }, []);
+    } catch (error) {
+      console.error("Failed to load collection data:", error);
+      try {
+        const [cachedFarmers, cachedCollections] = await Promise.all([
+          getCachedFarmers(),
+          getCachedMilkEntries(),
+        ]);
+        setFarmers(cachedFarmers);
+        setCollections(cachedCollections);
+        toast.error("Loaded cached data. Working offline.");
+      } catch (cacheError) {
+        console.error("Failed to load cached collection data:", cacheError);
+        toast.error("Failed to load collection data");
+      }
+    } finally {
+      setLoadingData(false);
+    }
+  }, [getCachedFarmers, getCachedMilkEntries, isOnline]);
 
   useEffect(() => {
-    if (!selectedFarmer) return;
+    void loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!selectedFarmer) {
+      return;
+    }
 
     if (selectedFarmer.milkType.length === 1) {
       setMilkType(selectedFarmer.milkType[0]);
-    } else {
-      setMilkType(null);
-    }
-  }, [selectedFarmer]);
-
-  useEffect(() => {
-    if (selectedFarmer && selectedFarmer.status !== "Active") {
-      toast.error("Selected farmer is inactive");
-      setFarmerId("");
-      setMilkType(null);
     }
   }, [selectedFarmer]);
 
@@ -150,191 +175,35 @@ const MilkEntryPage: React.FC = () => {
 
   useEffect(() => {
     const fetchRate = async () => {
-      if (!selectedFarmer || !milkType || !fat || !snf || !date) return;
+      if (!selectedFarmer || !milkType || !fat || !snf || !date) {
+        return;
+      }
 
       try {
         setLoadingRate(true);
-
-        const roundToStep = (value: number, step: number) =>
-          +(Math.round(value / step) * step).toFixed(1);
-
-        const fatRounded = roundToStep(Number(fat), 0.1);
-        const snfRounded = roundToStep(Number(snf), 0.1);
-
-        const res = await getRateForMilk({
+        const response = await getRateForMilk({
           milkType,
-          fat: fatRounded,
-          snf: snfRounded,
+          fat: Number(fat),
+          snf: Number(snf),
           date,
         });
-
-        setRate(res.data.rate.toFixed(2));
-      } catch (err) {
-        console.error("Rate fetch failed", err);
+        setRate(Number(response.data.rate || 0).toFixed(2));
+      } catch (error) {
+        console.error("Rate fetch failed:", error);
         setRate("0.00");
       } finally {
         setLoadingRate(false);
       }
     };
 
-    fetchRate();
-  }, [selectedFarmer, fat, snf, date, milkType]);
+    void fetchRate();
+  }, [date, fat, milkType, selectedFarmer, snf]);
 
-  const handleSave = async () => {
-    if (!validate() || !selectedFarmer) return;
-
-    if (selectedFarmer.status !== "Active") {
-      toast.error("Cannot add milk collection for inactive farmer");
-      return;
-    }
-    if (!milkType) {
-      toast.error("Please select milk type");
-      return false;
-    }
-
-    try {
-      setSaving(true);
-
-      await addMilkEntry({
-        date,
-        shift,
-        farmerId: selectedFarmer._id,
-        milkType,
-        quantity: Number(liters),
-        fat: Number(fat),
-        snf: Number(snf),
-        rate: Number(rate),
-      });
-
-      const refreshed = await getMilkEntries();
-      setCollections(refreshed.data);
-      toast.success("Milk collection saved successfully");
-      resetForm();
-    } catch (err) {
-      console.error("Failed to save milk entry:", err);
-      toast.error("Milk entry already exists for this farmer, date and shift.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const litersNum = parseFloat(liters) || 0;
-  const rateNum = parseFloat(rate) || 0;
-  const amount = litersNum * rateNum;
-
-  // ---------- VALIDATION ----------
-  const validate = () => {
-    const next: typeof errors = {};
-    const litersVal = parseFloat(liters);
-    const fatVal = parseFloat(fat);
-    const snfVal = parseFloat(snf);
-    if (Number(rate) <= 0) {
-      toast.error("Rate not available for this FAT/SNF");
-      return false;
-    }
-
-    if (!date) next.date = "Date is required.";
-    if (!farmerId) next.farmerId = "Farmer is required.";
-    if (!liters || litersVal <= 0 || Number.isNaN(litersVal)) {
-      next.liters = "Liters must be greater than 0.";
-    }
-    if (!fat || Number.isNaN(fatVal)) next.fat = "Enter FAT%";
-    if (!snf || Number.isNaN(snfVal)) next.snf = "Enter SNF%";
-
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  };
-
-  const resetForm = () => {
-    setDate(todayISO);
-    setShift("morning");
-    setFarmerId("");
-    setLiters("");
-    setFat("");
-    setSnf("");
-    setRate("0.00");
-    setRemarks("");
-    setErrors({});
-  };
-
-  // ---------- FILTERED COLLECTIONS ----------
-
-  const filteredCollections = useMemo(() => {
-    return collections.filter((c) => {
-      if (filterMode === "day") {
-        return c.date === filterDate;
-      }
-
-      if (filterMode === "range") {
-        if (fromDate && c.date < fromDate) return false;
-        if (toDate && c.date > toDate) return false;
-        return true;
-      }
-
-      return true; // all
-    });
-  }, [collections, filterMode, filterDate, fromDate, toDate]);
-
-  //Milk Container
-  const totals = useMemo(() => {
-    const result = {
-      cow: { morning: 0, evening: 0 },
-      buffalo: { morning: 0, evening: 0 },
-      mix: { morning: 0, evening: 0 },
-    };
-
-    filteredCollections.forEach((c) => {
-      result[c.milkType][c.shift] += c.liters;
-    });
-
-    return result;
-  }, [filteredCollections]);
-
-  const CONTAINER_CAPACITY = 40;
-
-  const generateContainers = (liters: number) => {
-    const full = Math.floor(liters / CONTAINER_CAPACITY);
-    const remaining = +(liters % CONTAINER_CAPACITY).toFixed(1);
-
-    return {
-      fullCount: full,
-      runningLiters: remaining,
-      isEmpty: liters === 0,
-    };
-  };
-
-  const cowMorning = generateContainers(totals.cow.morning);
-  const cowEvening = generateContainers(totals.cow.evening);
-  const buffaloMorning = generateContainers(totals.buffalo.morning);
-  const buffaloEvening = generateContainers(totals.buffalo.evening);
-  const mixMorning = generateContainers(totals.mix.morning);
-  const mixEvening = generateContainers(totals.mix.evening);
-
-  // ---------- UI derived ----------
-  const farmerCode = selectedFarmer?.code ?? "";
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-
-    try {
-      await deleteMilkEntry(deleteTarget._id);
-
-      setCollections((prev) => prev.filter((c) => c._id !== deleteTarget._id));
-
-      toast.success("Milk entry deleted successfully");
-      setDeleteTarget(null);
-    } catch (err) {
-      console.error("Delete failed:", err);
-      toast.error("Failed to delete milk entry");
-    }
-  };
-
-  //Debouncing
   const debouncedSearch = useMemo(
     () =>
       debounce((value: string) => {
         setFarmerSearch(value);
-      }, 500),
+      }, 300),
     [],
   );
 
@@ -344,30 +213,246 @@ const MilkEntryPage: React.FC = () => {
     };
   }, [debouncedSearch]);
 
+  const amount = (parseFloat(liters) || 0) * (parseFloat(rate) || 0);
+
+  const resetForm = () => {
+    setDate(todayISO);
+    setShift(getDefaultShift());
+    setFarmerId("");
+    setInputValue("");
+    setFarmerSearch("");
+    setLiters("");
+    setFat("");
+    setSnf("");
+    setRate("0.00");
+    setMilkType(null);
+    setRemarks("");
+    setErrors({});
+  };
+
+  const validate = () => {
+    const next: typeof errors = {};
+    const litersValue = parseFloat(liters);
+    const fatValue = parseFloat(fat);
+    const snfValue = parseFloat(snf);
+
+    if (!date) next.date = "Date is required.";
+    if (!farmerId) next.farmerId = "Farmer is required.";
+    if (!liters || Number.isNaN(litersValue) || litersValue <= 0) {
+      next.liters = "Liters must be greater than 0.";
+    }
+    if (!fat || Number.isNaN(fatValue)) {
+      next.fat = "Enter FAT %";
+    }
+    if (!snf || Number.isNaN(snfValue)) {
+      next.snf = "Enter SNF %";
+    }
+    if (Number(rate) <= 0) {
+      toast.error("Rate not available for this FAT/SNF");
+    }
+
+    setErrors(next);
+    return Object.keys(next).length === 0 && Number(rate) > 0;
+  };
+
+  const handleSave = async () => {
+    if (!selectedFarmer || !milkType || !validate()) {
+      return;
+    }
+
+    const clientGeneratedId = buildClientGeneratedId();
+    const payload = {
+      date,
+      shift,
+      farmerId: selectedFarmer._id,
+      milkType,
+      quantity: Number(liters),
+      fat: Number(fat),
+      snf: Number(snf),
+      rate: Number(rate),
+      clientGeneratedId,
+    };
+
+    const offlineEntry: MilkCollection = {
+      _id: `offline-${clientGeneratedId}`,
+      date,
+      shift,
+      farmerId: selectedFarmer._id,
+      farmerCode: selectedFarmer.code,
+      farmerName: selectedFarmer.name,
+      milkType,
+      liters: Number(liters),
+      fat: Number(fat),
+      snf: Number(snf),
+      rate: Number(rate),
+      amount,
+      remarks,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      clientGeneratedId,
+      syncStatus: "pending",
+    };
+
+    try {
+      setSaving(true);
+
+      if (!isOnline) {
+        await queueMilkEntry({ entry: offlineEntry, payload });
+        setCollections((prev) => [offlineEntry, ...prev]);
+        toast.success("Saved offline. It will sync automatically.");
+        resetForm();
+        return;
+      }
+
+      await addMilkEntry(payload);
+      const refreshed = await getMilkEntries();
+      setCollections(
+        refreshed.data.map((entry) => ({
+          ...entry,
+          syncStatus: "synced",
+        })),
+      );
+      toast.success("Milk collection saved successfully");
+      resetForm();
+    } catch (error) {
+      console.error("Failed to save milk entry:", error);
+
+      if (isNetworkFailure(error)) {
+        await queueMilkEntry({ entry: offlineEntry, payload });
+        setCollections((prev) => [offlineEntry, ...prev]);
+        toast.success("Network unavailable. Entry saved offline.");
+        resetForm();
+      } else {
+        toast.error("Milk entry already exists for this farmer, date and shift.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    try {
+      await deleteMilkEntry(deleteTarget._id);
+      setCollections((prev) => prev.filter((entry) => entry._id !== deleteTarget._id));
+      toast.success("Milk entry deleted successfully");
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error("Delete failed:", error);
+      toast.error("Failed to delete milk entry");
+    }
+  };
+
+  const filteredCollections = useMemo(
+    () =>
+      collections.filter((entry) => {
+        if (filterMode === "day") {
+          return entry.date === filterDate;
+        }
+
+        if (filterMode === "range") {
+          return entry.date >= fromDate && entry.date <= toDate;
+        }
+
+        return true;
+      }),
+    [collections, filterDate, filterMode, fromDate, toDate],
+  );
+
+  const totals = useMemo(() => {
+    const result = {
+      cow: { morning: 0, evening: 0 },
+      buffalo: { morning: 0, evening: 0 },
+      mix: { morning: 0, evening: 0 },
+    };
+
+    filteredCollections.forEach((entry) => {
+      result[entry.milkType][entry.shift] += entry.liters;
+    });
+
+    return result;
+  }, [filteredCollections]);
+
+  const renderContainers = (
+    label: string,
+    litersValue: number,
+    color: string,
+  ) => {
+    const fullCount = Math.floor(litersValue / 40);
+    const runningLiters = +(litersValue % 40).toFixed(1);
+
+    return (
+      <div className="flex flex-col items-center">
+        <div className="mb-3 text-xs font-semibold text-[#5E503F]">{label}</div>
+        <div className="flex h-[150px] items-end justify-center gap-4">
+          {fullCount > 0 && (
+            <MilkContainer
+              filledLiters={40}
+              color={color}
+              label={`${fullCount} cans`}
+            />
+          )}
+          {runningLiters > 0 && (
+            <MilkContainer
+              filledLiters={runningLiters}
+              color={color}
+              label={`${runningLiters} L`}
+            />
+          )}
+          {fullCount === 0 && runningLiters === 0 && (
+            <MilkContainer filledLiters={0} color={color} label="0 L" />
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="h-full w-full overflow-y-auto bg-[#F8F4E3] p-4 sm:p-5 lg:p-6">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 lg:gap-6">
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-[#5E503F]">Milk Collection</h1>
           <p className="text-sm text-[#5E503F]/70">
             Record daily milk collection data.
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#5E503F]/70">
+            <span
+              className={`rounded-full px-2 py-1 ${
+                isOnline ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {isOnline ? "Online" : "Offline"}
+            </span>
+            <span>{pendingCount} pending sync</span>
+            <span>
+              Last sync:{" "}
+              {lastSyncTime ? new Date(lastSyncTime).toLocaleString() : "Not synced yet"}
+            </span>
+            <button
+              type="button"
+              onClick={() => void syncNow()}
+              disabled={!isOnline || isSyncing}
+              className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-xs text-[#247B71] disabled:opacity-60"
+            >
+              {isSyncing ? "Syncing..." : "Sync now"}
+            </button>
+          </div>
         </div>
 
-        {/* Entry Card */}
         <div className="rounded-xl border border-[#E9E2C8] bg-white p-5 shadow-sm">
-          {loadingFarmers ? (
+          {loadingData ? (
             <div className="flex items-center justify-center py-10">
-              <Loader size="md" message="Loading farmers..." />
+              <Loader size="md" message="Loading collection data..." />
             </div>
           ) : farmers.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-sm text-[#5E503F]/70">
-              <p>No farmers found. Please add farmers first.</p>
+            <div className="py-10 text-center text-sm text-[#5E503F]/70">
+              No farmers found. Please sync or add farmers first.
             </div>
           ) : (
             <>
-              {/* First row: Date, Shift, Farmer Name */}
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <InputField
                   label="Date"
@@ -385,7 +470,7 @@ const MilkEntryPage: React.FC = () => {
                   <select
                     value={shift}
                     onChange={(e) => setShift(e.target.value as MilkShift)}
-                    className="mt-1 w-full rounded-md border border-[#E9E2C8] bg-white px-3 py-2 text-sm text-[#5E503F] outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                    className="mt-1 w-full rounded-md border border-[#E9E2C8] bg-white px-3 py-3 text-base text-[#5E503F] outline-none focus:ring-2 focus:ring-[#2A9D8F]"
                   >
                     <option value="morning">Morning</option>
                     <option value="evening">Evening</option>
@@ -396,83 +481,74 @@ const MilkEntryPage: React.FC = () => {
                   <label className="text-xs font-medium text-[#5E503F]">
                     Farmer <span className="text-red-500">*</span>
                   </label>
-
-                  {/* Search Input */}
                   <input
                     type="text"
                     placeholder="Enter farmer name or code..."
                     value={inputValue}
                     onChange={(e) => {
-                      // setFarmerSearch(e.target.value);
-                      setInputValue(e.target.value); // instant UI
-
+                      setInputValue(e.target.value);
                       debouncedSearch(e.target.value);
                       setFarmerId("");
                     }}
-                    className="mt-1 w-full rounded-md border border-[#E9E2C8] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                    className="mt-1 w-full rounded-md border border-[#E9E2C8] px-3 py-3 text-base outline-none focus:ring-2 focus:ring-[#2A9D8F]"
                   />
 
-                  {/* Floating Dropdown */}
                   {farmerSearch.trim() && filteredFarmers.length > 0 && (
-                    <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-[#E9E2C8] bg-white shadow-lg">
-                      {filteredFarmers.map((f) => (
-                        <div
-                          key={f._id}
+                    <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-[#E9E2C8] bg-white shadow-lg">
+                      {filteredFarmers.map((farmer) => (
+                        <button
+                          key={farmer._id}
+                          type="button"
                           onClick={() => {
-                            setFarmerId(f._id);
-                            setFarmerSearch(`${f.code} - ${f.name}`);
-                            setInputValue(`${f.code} - ${f.name}`); // ✅ ADD THIS
+                            setFarmerId(farmer._id);
+                            setFarmerSearch(`${farmer.code} - ${farmer.name}`);
+                            setInputValue(`${farmer.code} - ${farmer.name}`);
                           }}
-                          className="cursor-pointer px-3 py-2 text-sm hover:bg-[#F8F4E3]"
+                          className="block w-full px-3 py-3 text-left text-sm hover:bg-[#F8F4E3]"
                         >
-                          {f.code} - {f.name}
-                        </div>
+                          {farmer.code} - {farmer.name}
+                        </button>
                       ))}
                     </div>
                   )}
 
                   {errors.farmerId && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {errors.farmerId}
-                    </p>
+                    <p className="mt-1 text-xs text-red-600">{errors.farmerId}</p>
                   )}
                 </div>
               </div>
-              {/* Milk type if they have both Cow & Buffalo */}
+
               {selectedFarmer && selectedFarmer.milkType.length > 1 && (
                 <div className="mt-4">
                   <span className="text-xs font-medium text-[#5E503F]">
                     Milk Type <span className="text-red-500">*</span>
                   </span>
-
-                  <div className="mt-2 grid grid-cols-2 sm:flex gap-3">
-                    {selectedFarmer.milkType.map((t) => (
+                  <div className="mt-2 grid grid-cols-2 gap-3 sm:flex">
+                    {selectedFarmer.milkType.map((value) => (
                       <button
-                        key={t}
+                        key={value}
                         type="button"
-                        onClick={() => setMilkType(t)}
-                        className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
-                          milkType === t
+                        onClick={() => setMilkType(value)}
+                        className={`flex-1 rounded-md border px-3 py-3 text-base font-medium ${
+                          milkType === value
                             ? "border-[#2A9D8F] bg-[#2A9D8F]/10 text-[#2A9D8F]"
                             : "border-[#E9E2C8] text-[#5E503F]"
                         }`}
                       >
-                        {t === "cow" && "🐄 Cow Milk"}
-                        {t === "buffalo" && "🐃 Buffalo Milk"}
-                        {t === "mix" && "🥛 Mix Milk"}
+                        {value === "cow" && "Cow Milk"}
+                        {value === "buffalo" && "Buffalo Milk"}
+                        {value === "mix" && "Mix Milk"}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Second row: Farmer Code, Liters, Fat, SNF */}
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <InputField
                   label="Farmer Code"
-                  value={farmerCode}
+                  value={selectedFarmer?.code ?? ""}
                   readOnly
-                  helperText="Auto-filled from farmer selection"
                 />
                 <InputField
                   label="Liters"
@@ -483,6 +559,7 @@ const MilkEntryPage: React.FC = () => {
                   value={liters}
                   onChange={(e) => setLiters(e.target.value)}
                   error={errors.liters}
+                  inputClassName="text-lg font-semibold"
                 />
                 <InputField
                   label="Fat %"
@@ -490,52 +567,47 @@ const MilkEntryPage: React.FC = () => {
                   type="number"
                   step="0.1"
                   min="0"
-                  helperText=" must be > 3"
                   value={fat}
                   onChange={(e) => setFat(e.target.value)}
                   error={errors.fat}
+                  inputClassName="text-lg font-semibold"
                 />
                 <InputField
                   label="SNF %"
                   requiredLabel
                   type="number"
                   step="0.1"
-                  min={7}
-                  max={9.5}
-                  helperText=" must be > 7"
+                  min="0"
                   value={snf}
                   onChange={(e) => setSnf(e.target.value)}
                   error={errors.snf}
+                  inputClassName="text-lg font-semibold"
                 />
               </div>
 
-              {/* Third row: Rate, Total Amount, Save */}
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <InputField
-                  label="Rate (₹)"
+                  label="Rate"
                   value={loadingRate ? "Fetching..." : rate}
                   readOnly
-                  helperText="Auto-calculated from rate chart"
                 />
-
                 <InputField
-                  label="Total Amount (₹)"
+                  label="Total Amount"
                   value={amount.toFixed(2)}
                   readOnly
                 />
-                <div className="flex items-end lg:col-span-1">
+                <div className="flex items-end">
                   <button
                     type="button"
-                    onClick={handleSave}
+                    onClick={() => void handleSave()}
                     disabled={saving}
-                    className="w-full rounded-md bg-[#2A9D8F] px-4 py-3 text-sm font-medium text-white shadow hover:bg-[#247B71] disabled:cursor-not-allowed disabled:opacity-70"
+                    className="w-full rounded-md bg-[#2A9D8F] px-4 py-4 text-base font-medium text-white shadow hover:bg-[#247B71] disabled:opacity-70"
                   >
-                    {saving ? "Saving..." : "Save Collection"}
+                    {saving ? "Saving..." : isOnline ? "Save Collection" : "Save Offline"}
                   </button>
                 </div>
               </div>
 
-              {/* Remarks */}
               <div className="mt-4">
                 <label className="text-xs font-medium text-[#5E503F]">
                   Remarks (optional)
@@ -552,311 +624,54 @@ const MilkEntryPage: React.FC = () => {
           )}
         </div>
 
-        {/* Milk Containers Visualization */}
         <div className="rounded-xl border border-[#E9E2C8] bg-white p-5 shadow-sm">
           <h2 className="mb-5 text-sm font-semibold text-[#5E503F]">
             Milk Can Platform (40L each)
           </h2>
 
-          <div className="overflow-x-auto pb-2">
-            <div className="grid grid-cols-6 gap-6 min-w-[900px] w-full text-center">
-              {/* Cow Morning */}
-              <div className="flex flex-col items-center w-full">
-                <div className=" text-xs font-semibold text-[#E76F51]">
-                  🐄 Cow Morning
-                </div>
-
-                {/* Full count badge */}
-
-                <div className="flex items-end justify-center gap-4 h-[150px]">
-                  {/* FULL CAN */}
-                  {cowMorning.fullCount > 0 && (
-                    <MilkContainer
-                      filledLiters={40}
-                      color="#E76F51"
-                      label={`${cowMorning.fullCount} cans`}
-                    />
-                  )}
-
-                  {/* RUNNING CAN */}
-                  {cowMorning.runningLiters > 0 && (
-                    <MilkContainer
-                      filledLiters={cowMorning.runningLiters}
-                      color="#E76F51"
-                      label={`${cowMorning.runningLiters} L`}
-                    />
-                  )}
-
-                  {/* EMPTY */}
-                  {cowMorning.fullCount === 0 &&
-                    cowMorning.runningLiters === 0 && (
-                      <MilkContainer
-                        filledLiters={0}
-                        color="#E76F51"
-                        label="0 L"
-                      />
-                    )}
-                </div>
-
-                <div className="mt-3 w-full h-[3px] bg-[#DCCFC0] rounded-full" />
-              </div>
-
-              {/* Cow Evening */}
-              {/* <div className="flex flex-col items-center px-6 border-r border-dashed border-[#E9E2C8] min-w-[260px]">
-                  <div className=" text-xs font-semibold text-[#F4A261]"> */}
-              <div className="flex flex-col items-center w-full">
-                <div className=" text-xs font-semibold text-[#E76F51]">
-                  🐄 Cow Evening
-                </div>
-
-                {/* Full count badge */}
-                <div className="flex items-end justify-center gap-4 h-[150px]">
-                  {cowEvening.fullCount > 0 && (
-                    <MilkContainer
-                      filledLiters={40}
-                      color="#F4A261"
-                      label={`${cowEvening.fullCount} cans`}
-                    />
-                  )}
-
-                  {cowEvening.runningLiters > 0 && (
-                    <MilkContainer
-                      filledLiters={cowEvening.runningLiters}
-                      color="#F4A261"
-                      label={`${cowEvening.runningLiters} L`}
-                    />
-                  )}
-
-                  {cowEvening.fullCount === 0 &&
-                    cowEvening.runningLiters === 0 && (
-                      <MilkContainer
-                        filledLiters={0}
-                        color="#F4A261"
-                        label="0 L"
-                      />
-                    )}
-                </div>
-
-                <div className="mt-3 w-full h-[3px] bg-[#DCCFC0] rounded-full" />
-              </div>
-
-              {/* Buffalo Morning */}
-              <div className="flex flex-col items-center w-full">
-                <div className=" text-xs font-semibold text-[#E76F51]">
-                  🐃 Buffalo Morning
-                </div>
-
-                <div className="flex items-end justify-center gap-4 h-[150px]">
-                  {buffaloMorning.fullCount > 0 && (
-                    <MilkContainer
-                      filledLiters={40}
-                      color="#457B9D"
-                      label={`${buffaloMorning.fullCount} cans`}
-                    />
-                  )}
-
-                  {buffaloMorning.runningLiters > 0 && (
-                    <MilkContainer
-                      filledLiters={buffaloMorning.runningLiters}
-                      color="#457B9D"
-                      label={`${buffaloMorning.runningLiters} L`}
-                    />
-                  )}
-
-                  {buffaloMorning.fullCount === 0 &&
-                    buffaloMorning.runningLiters === 0 && (
-                      <MilkContainer
-                        filledLiters={0}
-                        color="#457B9D"
-                        label="0 L"
-                      />
-                    )}
-                </div>
-
-                <div className="mt-3 w-full h-[3px] bg-[#DCCFC0] rounded-full" />
-              </div>
-
-              {/* Buffalo Evening */}
-              {/* <div className="flex flex-col items-center px-6 min-w-[260px]">
-                  <div className=" text-xs font-semibold text-[#1D3557]"> */}
-              <div className="flex flex-col items-center w-full">
-                <div className=" text-xs font-semibold text-[#E76F51]">
-                  🐃 Buffalo Evening
-                </div>
-
-                {/* Full count badge */}
-                <div className="flex items-end justify-center gap-4 h-[150px]">
-                  {buffaloEvening.fullCount > 0 && (
-                    <MilkContainer
-                      filledLiters={40}
-                      color="#1D3557"
-                      label={`${buffaloEvening.fullCount} cans`}
-                    />
-                  )}
-
-                  {buffaloEvening.runningLiters > 0 && (
-                    <MilkContainer
-                      filledLiters={buffaloEvening.runningLiters}
-                      color="#1D3557"
-                      label={`${buffaloEvening.runningLiters} L`}
-                    />
-                  )}
-
-                  {buffaloEvening.fullCount === 0 &&
-                    buffaloEvening.runningLiters === 0 && (
-                      <MilkContainer
-                        filledLiters={0}
-                        color="#1D3557"
-                        label="0 L"
-                      />
-                    )}
-                </div>
-
-                <div className="mt-3 w-full h-[3px] bg-[#DCCFC0] rounded-full" />
-              </div>
-
-              {/* mix Morning */}
-              {/* <div className="flex flex-col items-center px-6 border-r border-dashed border-[#E9E2C8] min-w-[260px]">
-                  <div className=" text-xs font-semibold text-[#457B9D]"> */}
-              <div className="flex flex-col items-center w-full">
-                <div className=" text-xs font-semibold text-[#1D3557]">
-                  🥛 Mix Morning
-                </div>
-
-                <div className="flex items-end justify-center gap-4 h-[150px]">
-                  {mixMorning.fullCount > 0 && (
-                    <MilkContainer
-                      filledLiters={40}
-                      color="#1D3557"
-                      label={`${mixMorning.fullCount} cans`}
-                    />
-                  )}
-
-                  {mixMorning.runningLiters > 0 && (
-                    <MilkContainer
-                      filledLiters={mixMorning.runningLiters}
-                      color="#1D3557"
-                      label={`${mixMorning.runningLiters} L`}
-                    />
-                  )}
-
-                  {mixMorning.fullCount === 0 &&
-                    mixMorning.runningLiters === 0 && (
-                      <MilkContainer
-                        filledLiters={0}
-                        color="#1D3557"
-                        label="0 L"
-                      />
-                    )}
-                </div>
-
-                <div className="mt-3 w-full h-[3px] bg-[#DCCFC0] rounded-full" />
-              </div>
-
-              {/* mix Evening */}
-              {/* <div className="flex flex-col items-center px-6 min-w-[260px]">
-                  <div className=" text-xs font-semibold text-[#1D3557]"> */}
-              <div className="flex flex-col items-center w-full">
-                <div className=" text-xs font-semibold text-[#1D3557]">
-                  🥛 Mix Evening
-                </div>
-
-                {/* Full count badge */}
-                <div className="flex items-end justify-center gap-4 h-[150px]">
-                  {mixEvening.fullCount > 0 && (
-                    <MilkContainer
-                      filledLiters={40}
-                      color="#1D3557"
-                      label={`${mixEvening.fullCount} cans`}
-                    />
-                  )}
-
-                  {mixEvening.runningLiters > 0 && (
-                    <MilkContainer
-                      filledLiters={mixEvening.runningLiters}
-                      color="#1D3557"
-                      label={`${mixEvening.runningLiters} L`}
-                    />
-                  )}
-
-                  {mixEvening.fullCount === 0 &&
-                    mixEvening.runningLiters === 0 && (
-                      <MilkContainer
-                        filledLiters={0}
-                        color="#1D3557"
-                        label="0 L"
-                      />
-                    )}
-                </div>
-
-                <div className="mt-3 w-full h-[3px] bg-[#DCCFC0] rounded-full" />
-              </div>
-            </div>
+          <div className="grid min-w-[900px] grid-cols-6 gap-6 overflow-x-auto">
+            {renderContainers("Cow Morning", totals.cow.morning, "#E76F51")}
+            {renderContainers("Cow Evening", totals.cow.evening, "#F4A261")}
+            {renderContainers("Buffalo Morning", totals.buffalo.morning, "#457B9D")}
+            {renderContainers("Buffalo Evening", totals.buffalo.evening, "#1D3557")}
+            {renderContainers("Mix Morning", totals.mix.morning, "#6D597A")}
+            {renderContainers("Mix Evening", totals.mix.evening, "#8E44AD")}
           </div>
         </div>
 
-        {/* List + Filters */}
         <div className="rounded-xl border border-[#E9E2C8] bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center gap-4 mb-4">
-            {" "}
-            <h2 className="text-sm font-semibold text-[#5E503F]">
-              Collections
-            </h2>
-            {/* Filter mode */}
+          <div className="mb-4 flex flex-wrap items-center gap-4">
+            <h2 className="text-sm font-semibold text-[#5E503F]">Collections</h2>
+
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-[#5E503F]">
-                Filter:
-              </span>
-              <button
-                type="button"
-                onClick={() => setFilterMode("day")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                  filterMode === "day"
-                    ? "bg-[#2A9D8F] text-white"
-                    : "bg-[#E9E2C8] text-[#5E503F]"
-                }`}
-              >
-                Day
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterMode("range")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                  filterMode === "range"
-                    ? "bg-[#2A9D8F] text-white"
-                    : "bg-[#E9E2C8] text-[#5E503F]"
-                }`}
-              >
-                10 Days
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterMode("all")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                  filterMode === "all"
-                    ? "bg-[#2A9D8F] text-white"
-                    : "bg-[#E9E2C8] text-[#5E503F]"
-                }`}
-              >
-                All
-              </button>
+              <span className="text-xs font-medium text-[#5E503F]">Filter:</span>
+              {(["day", "range", "all"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setFilterMode(mode)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                    filterMode === mode
+                      ? "bg-[#2A9D8F] text-white"
+                      : "bg-[#E9E2C8] text-[#5E503F]"
+                  }`}
+                >
+                  {mode === "day" ? "Day" : mode === "range" ? "10 Days" : "All"}
+                </button>
+              ))}
             </div>
+
             {filterMode === "day" && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[#5E503F]">Day</span>
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="rounded-md border border-[#E9E2C8] bg-white px-3 py-1.5 text-xs text-[#5E503F] outline-none focus:ring-2 focus:ring-[#2A9D8F]"
-                />
-              </div>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="rounded-md border border-[#E9E2C8] bg-white px-3 py-1.5 text-xs text-[#5E503F] outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+              />
             )}
+
             {filterMode === "range" && (
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[#5E503F]">From</span>
                 <input
                   type="date"
                   value={fromDate}
@@ -865,10 +680,8 @@ const MilkEntryPage: React.FC = () => {
                     setFromDate(selectedFrom);
                     setToDate(addDays(selectedFrom, 9));
                   }}
-                  className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-xs w-32 outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                  className="rounded-md border border-[#E9E2C8] bg-white px-3 py-1.5 text-xs text-[#5E503F] outline-none focus:ring-2 focus:ring-[#2A9D8F]"
                 />
-
-                <span className="text-xs font-medium text-[#5E503F]">To</span>
                 <input
                   type="date"
                   value={toDate}
@@ -877,118 +690,90 @@ const MilkEntryPage: React.FC = () => {
                     setToDate(selectedTo);
                     setFromDate(addDays(selectedTo, -9));
                   }}
-                  className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-xs w-32 outline-none focus:ring-2 focus:ring-[#2A9D8F]"
+                  className="rounded-md border border-[#E9E2C8] bg-white px-3 py-1.5 text-xs text-[#5E503F] outline-none focus:ring-2 focus:ring-[#2A9D8F]"
                 />
               </div>
             )}
           </div>
 
-          {/* Table */}
           <div className="overflow-x-auto rounded-lg border border-[#E9E2C8]">
             <table className="min-w-full border-collapse text-xs">
               <thead className="bg-[#F8F4E3]">
                 <tr>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-left font-semibold text-[#5E503F]">
-                    Date
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-left font-semibold text-[#5E503F]">
-                    Shift
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-left font-semibold text-[#5E503F]">
-                    Farmer Code
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-left font-semibold text-[#5E503F]">
-                    Farmer Name
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    Milk Type
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    Liters
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    Fat %
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    SNF %
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    Rate (₹)
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    Total (₹)
-                  </th>
-                  <th className="border-b border-[#E9E2C8] px-3 py-2 text-center font-semibold text-[#5E503F]">
-                    Actions
-                  </th>
+                  {[
+                    "Date",
+                    "Shift",
+                    "Farmer Code",
+                    "Farmer Name",
+                    "Milk Type",
+                    "Liters",
+                    "Fat %",
+                    "SNF %",
+                    "Rate",
+                    "Total",
+                    "Sync",
+                    "Actions",
+                  ].map((label) => (
+                    <th
+                      key={label}
+                      className="border-b border-[#E9E2C8] px-3 py-2 text-left font-semibold text-[#5E503F]"
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredCollections.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={12}
                       className="px-4 py-6 text-center text-xs text-[#5E503F]/60"
                     >
                       No collections recorded for this filter.
                     </td>
                   </tr>
                 ) : (
-                  filteredCollections.map((c, index) => (
+                  filteredCollections.map((entry, index) => (
                     <tr
-                      key={c._id}
+                      key={entry._id}
                       className={index % 2 === 0 ? "bg-white" : "bg-[#FDFCF8]"}
                     >
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.date}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.shift}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.farmerCode}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.farmerName}</td>
                       <td className="border-t border-[#E9E2C8] px-3 py-2">
-                        {c.date}
+                        {entry.milkType}
                       </td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.liters.toFixed(2)}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.fat.toFixed(1)}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.snf.toFixed(1)}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.rate.toFixed(2)}</td>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">{entry.amount.toFixed(2)}</td>
                       <td className="border-t border-[#E9E2C8] px-3 py-2">
-                        {c.shift}
-                      </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2">
-                        {c.farmerCode}
-                      </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2">
-                        {c.farmerName}
-                      </td>
-                      <td>
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                            c.milkType === "cow"
-                              ? "bg-[#E76F51]/10 text-[#E76F51]"
-                              : c.milkType === "buffalo"
-                                ? "bg-[#457B9D]/10 text-[#457B9D]"
-                                : "bg-[#8E44AD]/10 text-[#8E44AD]"
+                          className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${
+                            entry.syncStatus === "pending"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
-                          {/* {c.milkType === "cow" && "🐄 Cow"} */}
-                          {c.milkType === "cow" && "Cow"}
-                          {c.milkType === "buffalo" && "Buffalo"}
-                          {c.milkType === "mix" && "Mix"}
+                          {entry.syncStatus === "pending" ? "Pending" : "Synced"}
                         </span>
                       </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2 text-center">
-                        {c.liters.toFixed(2)}
-                      </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2 text-center">
-                        {c.fat.toFixed(1)}
-                      </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2 text-center">
-                        {c.snf.toFixed(1)}
-                      </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2 text-center">
-                        {c.rate.toFixed(2)}
-                      </td>
-                      <td className="border-t border-[#E9E2C8] px-3 py-2 text-center">
-                        {c.amount.toFixed(2)}
-                      </td>
-                      <td className="text-center">
-                        <button
-                          onClick={() => setDeleteTarget(c)}
-                          className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-xs text-[#E76F51] hover:bg-[#E76F51]/10"
-                        >
-                          Delete
-                        </button>
+                      <td className="border-t border-[#E9E2C8] px-3 py-2">
+                        {entry.syncStatus === "pending" ? (
+                          <span className="text-[11px] text-[#5E503F]/60">Queued</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(entry)}
+                            className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-xs text-[#E76F51] hover:bg-[#E76F51]/10"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -998,6 +783,7 @@ const MilkEntryPage: React.FC = () => {
           </div>
         </div>
       </div>
+
       <ConfirmModal
         open={!!deleteTarget}
         title="Delete Milk Entry"
@@ -1007,9 +793,8 @@ const MilkEntryPage: React.FC = () => {
             <div className="space-y-1 text-sm">
               <p>Are you sure you want to delete this milk collection entry?</p>
               <p className="text-xs text-[#5E503F]/70">
-                {deleteTarget.date} – {deleteTarget.shift} –{" "}
-                {deleteTarget.farmerCode} ({deleteTarget.farmerName}) –{" "}
-                {deleteTarget.liters.toFixed(2)} L
+                {deleteTarget.date} - {deleteTarget.shift} - {deleteTarget.farmerCode} (
+                {deleteTarget.farmerName}) - {deleteTarget.liters.toFixed(2)} L
               </p>
             </div>
           )

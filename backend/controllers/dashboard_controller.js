@@ -1,4 +1,8 @@
 import Milk from "../models/Milk.js";
+import Bill from "../models/Bill.js";
+import Centre from "../models/Centre.js";
+import Farmer from "../models/Farmer.js";
+import User from "../models/User.js";
 import { getScopedFilter } from "../utils/access.js";
 
 export const getTodayDashboardStats = async (req, res) => {
@@ -133,5 +137,82 @@ export const getTopFarmers = async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+export const getGlobalDashboardStats = async (req, res) => {
+  try {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString()
+      .slice(0, 10);
+
+    const [
+      totalCentres,
+      activeCentres,
+      totalAdmins,
+      totalFarmers,
+      todayCollections,
+      monthCollections,
+      generatedBills,
+      paidBills,
+    ] = await Promise.all([
+      Centre.countDocuments(),
+      Centre.countDocuments({ status: "active" }),
+      User.countDocuments({ role: { $in: ["admin", "superadmin"] } }),
+      Farmer.countDocuments(),
+      Milk.aggregate([
+        { $match: { date: today } },
+        {
+          $group: {
+            _id: null,
+            totalLiters: { $sum: "$quantity" },
+            amount: { $sum: "$totalAmount" },
+          },
+        },
+      ]),
+      Milk.aggregate([
+        { $match: { date: { $gte: monthStart } } },
+        {
+          $group: {
+            _id: null,
+            totalLiters: { $sum: "$quantity" },
+            amount: { $sum: "$totalAmount" },
+          },
+        },
+      ]),
+      Bill.countDocuments({ periodFrom: { $gte: monthStart } }),
+      Bill.countDocuments({ periodFrom: { $gte: monthStart }, status: "paid" }),
+    ]);
+
+    res.json({
+      centres: {
+        total: totalCentres,
+        active: activeCentres,
+        disabled: Math.max(totalCentres - activeCentres, 0),
+      },
+      admins: {
+        total: totalAdmins,
+      },
+      farmers: {
+        total: totalFarmers,
+      },
+      today: todayCollections[0] || {
+        totalLiters: 0,
+        amount: 0,
+      },
+      month: monthCollections[0] || {
+        totalLiters: 0,
+        amount: 0,
+      },
+      bills: {
+        generated: generatedBills,
+        paid: paidBills,
+        pending: Math.max(generatedBills - paidBills, 0),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };

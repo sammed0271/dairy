@@ -4,6 +4,9 @@ const tabs = [
   { label: "Milk Collection", path: "/reports/daily" },
   { label: "Cow / Buffalo Yield", path: "/reports/milk-yield" },
   { label: "Billing", path: "/reports/billing" },
+  { label: "Farmer Payments", path: "/reports/farmer-payments" },
+  { label: "Milk Quality", path: "/reports/milk-quality" },
+  { label: "Audit Trail", path: "/reports/audit-trail" },
   { label: "Inventory", path: "/reports/inventory" },
 ];
 

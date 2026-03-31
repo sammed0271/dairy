@@ -16,6 +16,9 @@ import dashboardRoutes from "./routes/dashboard_routes.js";
 import rateChartRoutes from "./routes/rateChart_routes.js";
 import reportRoutes from "./routes/report_routes.js";
 import inventoryTransactionRoutes from "./routes/inventory_transaction_routes.js";
+import centreRoutes from "./routes/centre_routes.js";
+import adminRoutes from "./routes/admin_routes.js";
+import syncRoutes from "./routes/sync_routes.js";
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 const app = express();
@@ -61,6 +64,9 @@ app.use("/api/rate-chart", rateChartRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/inventory-transactions", inventoryTransactionRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/centres", centreRoutes);
+app.use("/api/admins", adminRoutes);
+app.use("/api/sync", syncRoutes);
 
 const PORT = process.env.PORT;
 

@@ -5,6 +5,7 @@ import {
   getTopFarmers,
   getMonthlyDashboardStats,
 } from "../../axios/dashboard_api";
+import { useSyncContext } from "../../context/SyncContext";
 import { useNavigate } from "react-router-dom";
 import StatCard from "../../components/statCard";
 import toast from "react-hot-toast";
@@ -42,6 +43,8 @@ type MonthStats = {
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { failedQueueItems, isOnline, isSyncing, lastSyncTime, pendingCount, syncNow } =
+    useSyncContext();
 
   const emptyShift = {
     totalLiters: 0,
@@ -182,6 +185,56 @@ const DashboardPage: React.FC = () => {
             subtitle="Share of monthly liters"
             variant="green"
           />
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[#5E503F]">Sync Status</h2>
+              <p className="text-xs text-[#5E503F]/70">
+                Keep centre devices aligned when connectivity changes during the day.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void syncNow()}
+              disabled={!isOnline || isSyncing}
+              className="rounded-md border border-[#E9E2C8] bg-white px-3 py-2 text-xs font-medium text-[#247B71] disabled:opacity-60"
+            >
+              {isSyncing ? "Syncing..." : "Sync now"}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <div className="rounded-lg bg-[#F8F4E3] p-4 text-sm text-[#5E503F]">
+              <div className="text-xs uppercase tracking-wide text-[#5E503F]/60">
+                Connection
+              </div>
+              <div className="mt-2 font-semibold">
+                {isOnline ? "Online" : "Offline"}
+              </div>
+            </div>
+            <div className="rounded-lg bg-[#F8F4E3] p-4 text-sm text-[#5E503F]">
+              <div className="text-xs uppercase tracking-wide text-[#5E503F]/60">
+                Pending Queue
+              </div>
+              <div className="mt-2 font-semibold">{pendingCount} records</div>
+            </div>
+            <div className="rounded-lg bg-[#F8F4E3] p-4 text-sm text-[#5E503F]">
+              <div className="text-xs uppercase tracking-wide text-[#5E503F]/60">
+                Failed Syncs
+              </div>
+              <div className="mt-2 font-semibold">{failedQueueItems.length} records</div>
+            </div>
+            <div className="rounded-lg bg-[#F8F4E3] p-4 text-sm text-[#5E503F]">
+              <div className="text-xs uppercase tracking-wide text-[#5E503F]/60">
+                Last Sync
+              </div>
+              <div className="mt-2 font-semibold">
+                {lastSyncTime ? new Date(lastSyncTime).toLocaleString() : "Not synced yet"}
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Breakdown */}

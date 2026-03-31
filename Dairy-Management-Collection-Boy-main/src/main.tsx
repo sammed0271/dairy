@@ -7,6 +7,7 @@ import "./index.css";
 import "./App.css";
 import App from "./App";
 import { FarmerProvider } from "./context/FarmerContext";
+import { SyncProvider } from "./context/SyncContext";
 import { Toaster } from "react-hot-toast";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -34,9 +35,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     />
     <React.StrictMode>
       <BrowserRouter>
-        <FarmerProvider>
-          <App />
-        </FarmerProvider>
+        <SyncProvider>
+          <FarmerProvider>
+            <App />
+          </FarmerProvider>
+        </SyncProvider>
       </BrowserRouter>
     </React.StrictMode>
   </>,

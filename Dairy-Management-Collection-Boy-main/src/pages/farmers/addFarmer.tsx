@@ -1,43 +1,70 @@
-// src/pages/farmers/addFarmer.tsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
-
+import { getCentres } from "../../axios/centre_api";
 import InputField from "../../components/inputField";
-import type { MilkType, MilkTypeUI } from "../../types/farmer";
+import SelectField from "../../components/selectField";
 import { ROUTES } from "../../constants/routes";
 import { useFarmerContext } from "../../context/FarmerContext";
-import toast from "react-hot-toast";
+import type { MilkType, MilkTypeUI } from "../../types/farmer";
+import { getStoredUser } from "../../utils/auth";
 
 const AddFarmerPage: React.FC = () => {
   const navigate = useNavigate();
   const { addFarmer } = useFarmerContext();
+  const user = getStoredUser();
+  const isSuperadmin = user?.role === "superadmin";
 
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
-
   const [milkType, setMilkType] = useState<MilkType[]>(["cow"]);
-
   const [address, setAddress] = useState("");
-
+  const [centreId, setCentreId] = useState("");
+  const [centres, setCentres] = useState<
+    Array<{ _id: string; name: string; code: string; status: string }>
+  >([]);
   const [errors, setErrors] = useState<{
     name?: string;
     mobile?: string;
   }>({});
   const [saving, setSaving] = useState(false);
 
-  const validate = () => {
-    if (milkType.length === 0) {
-      toast.error("Select at least one milk type");
+  useEffect(() => {
+    if (!isSuperadmin) {
       return;
     }
 
+    getCentres()
+      .then((response) => {
+        setCentres(response.data.filter((centre) => centre.status === "active"));
+      })
+      .catch((error) => {
+        console.error("Failed to load centres:", error);
+      });
+  }, [isSuperadmin]);
+
+  const validate = () => {
+    if (milkType.length === 0) {
+      toast.error("Select at least one milk type");
+      return false;
+    }
+
+    if (isSuperadmin && !centreId) {
+      toast.error("Select a collection centre");
+      return false;
+    }
+
     const next: typeof errors = {};
-    if (!name.trim()) next.name = "Farmer name is required.";
+    if (!name.trim()) {
+      next.name = "Farmer name is required.";
+    }
+
     if (!mobile.trim()) {
       next.mobile = "Mobile number is required.";
     } else if (!/^\d{10}$/.test(mobile.trim())) {
-      next.mobile = "Enter a valid 10‑digit mobile.";
+      next.mobile = "Enter a valid 10-digit mobile.";
     }
+
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -48,6 +75,7 @@ const AddFarmerPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!validate()) {
       toast.error("Please fix the form errors");
       return;
@@ -61,9 +89,10 @@ const AddFarmerPage: React.FC = () => {
         mobile,
         milkType,
         address,
+        centreId: isSuperadmin ? centreId : undefined,
       });
-      toast.success("Farmer added successfully");
 
+      toast.success("Farmer added successfully");
       navigate(ROUTES.farmers.list.path);
     } catch (error) {
       console.error("Error adding farmer:", error);
@@ -78,31 +107,31 @@ const AddFarmerPage: React.FC = () => {
     setMobile("");
     setMilkType(["cow"]);
     setAddress("");
+    setCentreId("");
     setErrors({});
   };
 
   const toggleMilkType = (type: MilkTypeUI) => {
     setMilkType((prev) => {
-      // BOTH selected
       if (type === "both") {
-        if (prev.includes("cow") && prev.includes("buffalo")) return [];
+        if (prev.includes("cow") && prev.includes("buffalo")) {
+          return [];
+        }
         return ["cow", "buffalo"];
       }
 
-      // MIX behaves separate
       if (type === "mix") {
-        if (prev.includes("mix")) return prev.filter((t) => t !== "mix");
+        if (prev.includes("mix")) {
+          return prev.filter((value) => value !== "mix");
+        }
         return ["mix"];
       }
 
-      // cow/buffalo toggle
       let updated = prev.includes(type)
-        ? prev.filter((t) => t !== type)
+        ? prev.filter((value) => value !== type)
         : [...prev, type];
 
-      // remove mix if cow/buffalo selected
-      updated = updated.filter((t) => t !== "mix");
-
+      updated = updated.filter((value) => value !== "mix");
       return updated;
     });
   };
@@ -110,7 +139,6 @@ const AddFarmerPage: React.FC = () => {
   return (
     <div className="h-full w-full overflow-auto bg-[#F8F4E3] p-6">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
-        {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
@@ -118,7 +146,7 @@ const AddFarmerPage: React.FC = () => {
               onClick={handleCancel}
               className="rounded-md border border-[#E9E2C8] bg-white px-3 py-2 text-sm text-[#5E503F] hover:bg-[#F8F4E3]"
             >
-              ← Back
+              Back
             </button>
             <div>
               <h1 className="text-2xl font-bold text-[#5E503F]">
@@ -131,17 +159,31 @@ const AddFarmerPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Form card */}
         <form
           onSubmit={handleSubmit}
           className="space-y-6 rounded-xl border border-[#E9E2C8] bg-white p-6 shadow-sm"
         >
-          {/* Basic info */}
           <div className="space-y-4">
             <h2 className="text-sm font-semibold text-[#5E503F]">
               Basic Information
             </h2>
+
             <div className="grid gap-4 sm:grid-cols-2">
+              {isSuperadmin && (
+                <SelectField
+                  label="Collection Centre"
+                  value={centreId}
+                  onChange={(e) => setCentreId(e.target.value)}
+                  options={[
+                    { label: "Select centre", value: "" },
+                    ...centres.map((centre) => ({
+                      label: `${centre.name} (${centre.code})`,
+                      value: centre._id,
+                    })),
+                  ]}
+                />
+              )}
+
               <InputField
                 label="Farmer Name"
                 requiredLabel
@@ -149,6 +191,7 @@ const AddFarmerPage: React.FC = () => {
                 onChange={(e) => setName(e.target.value)}
                 error={errors.name}
               />
+
               <div>
                 <label className="text-xs font-medium text-[#5E503F]">
                   Mobile <span className="text-red-500">*</span>
@@ -162,7 +205,7 @@ const AddFarmerPage: React.FC = () => {
                     onChange={(e) => setMobile(e.target.value)}
                     maxLength={10}
                     className="flex-1 rounded-r-md px-3 py-2 text-sm text-[#5E503F] outline-none"
-                    placeholder="10‑digit mobile number"
+                    placeholder="10-digit mobile number"
                   />
                 </div>
                 {errors.mobile && (
@@ -170,35 +213,34 @@ const AddFarmerPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Milk Type */}
               <div className="sm:col-span-2">
                 <span className="text-xs font-medium text-[#5E503F]">
                   Milk Type <span className="text-red-500">*</span>
                 </span>
                 <div className="mt-1 flex gap-3">
                   {(["cow", "buffalo", "both", "mix"] as MilkTypeUI[]).map(
-                    (t) => {
+                    (value) => {
                       const active =
-                        t === "both"
+                        value === "both"
                           ? milkType.includes("cow") &&
                             milkType.includes("buffalo")
-                          : milkType.includes(t as MilkType);
+                          : milkType.includes(value as MilkType);
 
                       return (
                         <button
-                          key={t}
+                          key={value}
                           type="button"
-                          onClick={() => toggleMilkType(t)}
+                          onClick={() => toggleMilkType(value)}
                           className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
                             active
                               ? "border-[#2A9D8F] bg-[#2A9D8F]/10 text-[#2A9D8F]"
                               : "border-[#E9E2C8] text-[#5E503F]"
                           }`}
                         >
-                          {t === "cow" && "🐄 Cow"}
-                          {t === "buffalo" && "🐃 Buffalo"}
-                          {t === "both" && "🐄🐃 Both"}
-                          {t === "mix" && "🥛 Mix"}
+                          {value === "cow" && "Cow"}
+                          {value === "buffalo" && "Buffalo"}
+                          {value === "both" && "Both"}
+                          {value === "mix" && "Mix"}
                         </button>
                       );
                     },
@@ -208,7 +250,6 @@ const AddFarmerPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Address */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-[#5E503F]">
               Address (optional)
@@ -222,7 +263,6 @@ const AddFarmerPage: React.FC = () => {
             />
           </div>
 
-          {/* Actions */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <button
               type="button"

@@ -19,8 +19,16 @@ const paymentSchema = new mongoose.Schema({
     default: null,
     index: true,
   },
-  farmerId: mongoose.Schema.Types.ObjectId,
-  billId: mongoose.Schema.Types.ObjectId,
+  farmerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Farmer",
+    index: true,
+  },
+  billId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Bill",
+    index: true,
+  },
 
   amount: Number,
 
@@ -35,7 +43,7 @@ const paymentSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["initiated", "processing", "processed", "failed"],
+    enum: ["initiated", "processing", "processed", "failed", "reversed"],
     default: "initiated",
   },
 
@@ -43,5 +51,9 @@ const paymentSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now },
 });
+
+paymentSchema.index({ centreId: 1, createdAt: -1 });
+paymentSchema.index({ farmerId: 1, createdAt: -1 });
+paymentSchema.index({ billId: 1, createdAt: -1 });
 
 export default mongoose.model("payment", paymentSchema);

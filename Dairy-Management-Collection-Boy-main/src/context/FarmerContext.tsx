@@ -14,12 +14,13 @@ type AddFarmerInput = {
   mobile: string;
   milkType: MilkType[];
   address?: string;
+  centreId?: string;
 };
 
 type FarmerContextValue = {
   farmers: Farmer[];
   addFarmer: (input: AddFarmerInput) => Promise<void>;
-  reloadFarmers: () => Promise<void>;
+  reloadFarmers: (centreId?: string) => Promise<void>;
   loading: boolean;
 };
 
@@ -32,10 +33,12 @@ export const FarmerProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState<boolean>(false);
 
   // Load farmers from backend
-  const reloadFarmers = useCallback(async () => {
+  const reloadFarmers = useCallback(async (centreId?: string) => {
     try {
       setLoading(true);
-      const res = await getFarmers();
+      const res = await getFarmers(
+        centreId ? { centreId } : undefined,
+      );
       setFarmers(res.data);
     } catch (error) {
       console.error("Error fetching farmers:", error);
@@ -58,6 +61,7 @@ export const FarmerProvider: React.FC<{ children: React.ReactNode }> = ({
         mobile: input.mobile.trim(),
         address: input.address?.trim() || "",
         milkType: input.milkType,
+        centreId: input.centreId,
       });
 
       // refresh list after adding

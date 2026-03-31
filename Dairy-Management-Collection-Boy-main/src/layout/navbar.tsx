@@ -1,12 +1,11 @@
-// src/layout/navbar.tsx
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useSyncContext } from "../context/SyncContext";
+import { clearSession, getStoredUser } from "../utils/auth";
 
 interface NavbarProps {
   onMenuClick: () => void;
 }
-
-/* ================= ICONS ================= */
 
 const BellIcon: React.FC = () => (
   <svg
@@ -59,119 +58,128 @@ const MenuIcon: React.FC = () => (
   </svg>
 );
 
-/* ================= PAGE META ================= */
-
 function getPageMeta(pathname: string): { title: string; subtitle: string } {
-  if (pathname.startsWith("/dashboard"))
+  if (pathname.startsWith("/dashboard")) {
     return {
       title: "Dashboard",
       subtitle: "Overview of collection, payments and inventory",
     };
+  }
+
+  if (pathname.startsWith("/centres")) {
+    return {
+      title: "Centres",
+      subtitle: "Manage collection centres across the dairy network",
+    };
+  }
+
+  if (pathname.startsWith("/admins")) {
+    return {
+      title: "Admins",
+      subtitle: "Manage user access and centre assignments",
+    };
+  }
 
   if (pathname.startsWith("/farmers")) {
-    if (pathname.includes("/add"))
+    if (pathname.includes("/add")) {
       return {
         title: "Add Farmer",
         subtitle: "Register a new farmer in the dairy system",
       };
+    }
     return {
       title: "Farmer Management",
       subtitle: "View and manage all farmers",
     };
   }
 
-  if (pathname.startsWith("/milk-collection"))
+  if (pathname.startsWith("/milk-collection")) {
     return {
       title: "Milk Collection",
       subtitle: "Daily milk entry and collection summary",
     };
+  }
 
-  if (pathname.startsWith("/deduction"))
+  if (pathname.startsWith("/deduction")) {
     return {
       title: "Advance / Food / Medical",
       subtitle: "Manage deductions from farmer bills",
     };
+  }
 
-  if (pathname.startsWith("/bills"))
+  if (pathname.startsWith("/bills")) {
     return {
       title: "Generate Bills",
       subtitle: "Create and manage farmer payment bills",
     };
+  }
 
-  if (pathname.startsWith("/bonus"))
+  if (pathname.startsWith("/payments")) {
+    return {
+      title: "Payments",
+      subtitle: "Track payout initiation and settlement status",
+    };
+  }
+
+  if (pathname.startsWith("/bonus")) {
     return {
       title: "Bonus Management",
       subtitle: "Configure and distribute bonuses",
     };
+  }
 
-  if (pathname.startsWith("/rate-chart"))
+  if (pathname.startsWith("/rate-chart")) {
     return {
       title: "Rate Chart",
-      subtitle: "Manage milk rate chart by FAT & SNF",
+      subtitle: "Manage milk rate chart by FAT and SNF",
     };
+  }
 
-  if (pathname.startsWith("/inventory"))
+  if (pathname.startsWith("/inventory")) {
     return {
       title: "Inventory",
       subtitle: "Track cattle feed, cans and other stock",
     };
+  }
 
-  if (pathname.startsWith("/reports"))
+  if (pathname.startsWith("/reports")) {
     return { title: "Reports", subtitle: "Daily and monthly reports" };
+  }
+
+  if (pathname.startsWith("/settings")) {
+    return {
+      title: "Settings",
+      subtitle: "Account, sync health, and device preferences",
+    };
+  }
 
   return { title: "My Dairy", subtitle: "Dairy management system" };
 }
 
-/* ================= COMPONENT ================= */
-
 const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const userName = "Admin";
+  const user = getStoredUser();
+  const meta = getPageMeta(location.pathname);
+  const userName = user?.name || "Admin";
+  const {
+    failedQueueItems,
+    isOnline,
+    isSyncing,
+    pendingCount,
+    lastSyncTime,
+    syncNow,
+  } = useSyncContext();
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
-  const [showSettings, setShowSettings] = React.useState(false);
-  const settingsRef = React.useRef<HTMLDivElement>(null);
-  const meta = getPageMeta(location.pathname);
-
   const notificationRef = React.useRef<HTMLDivElement>(null);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
-  const [isDark, setIsDark] = React.useState(
-    document.documentElement.classList.contains("dark"),
-  );
-
-  const toggleTheme = () => {
-    if (isDark) {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    } else {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    }
-    setIsDark(!isDark);
-  };
-
-  React.useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-
-    if (savedTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      setIsDark(true);
-    }
-  }, []);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      if (settingsRef.current && !settingsRef.current.contains(target)) {
-        setShowSettings(false);
-      }
-
-      if (
-        notificationRef.current &&
-        !notificationRef.current.contains(target)
-      ) {
+      if (notificationRef.current && !notificationRef.current.contains(target)) {
         setShowNotifications(false);
       }
 
@@ -181,30 +189,29 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const secondaryLabel =
+    user?.role === "superadmin"
+      ? "Superadmin"
+      : user?.centreId && typeof user.centreId === "object"
+        ? `${user.centreId.name} admin`
+        : "Administrator";
+
   return (
-<header className="flex items-center justify-between border-b border-[#E9E2C8] bg-[#F8F4E3] px-4 sm:px-6 py-3 shadow-sm">      {" "}
-      {/* LEFT SECTION */}
+    <header className="flex items-center justify-between border-b border-[#E9E2C8] bg-[#F8F4E3] px-4 py-3 shadow-sm sm:px-6">
       <div className="flex items-start gap-3">
-        {/* Hamburger (mobile only) */}
         <button
           type="button"
-          onClick={() => {
-            console.log("Menu clicked"); // temporary debug
-            onMenuClick();
-          }}
-          className="lg:hidden rounded-md p-2 text-[#5E503F]/80 hover:bg-[#EDE4C5]"
+          onClick={onMenuClick}
+          className="rounded-md p-2 text-[#5E503F]/80 hover:bg-[#EDE4C5] lg:hidden"
         >
           <MenuIcon />
         </button>
 
         <div className="flex flex-col">
-          {/* Breadcrumb hidden on small */}
-          <div className="hidden sm:flex items-center gap-2 text-xs text-[#5E503F]/60">
+          <div className="hidden items-center gap-2 text-xs text-[#5E503F]/60 sm:flex">
             <button
               onClick={() => navigate("/dashboard")}
               className="hover:text-[#2A9D8F]"
@@ -215,28 +222,41 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
             <span>{meta.title}</span>
           </div>
 
-          <div className="text-base sm:text-lg font-semibold text-[#5E503F]">
+          <div className="text-base font-semibold text-[#5E503F] sm:text-lg">
             {meta.title}
           </div>
-
-          <div className="hidden sm:block text-xs text-[#5E503F]/70">
+          <div className="hidden text-xs text-[#5E503F]/70 sm:block">
             {meta.subtitle}
           </div>
         </div>
       </div>
-      {/* RIGHT SECTION */}
+
       <div className="flex items-center gap-2 sm:gap-4">
-        <div className="hidden border border-[#E9E2C8] sm:flex items-center gap-2 rounded-full bg-[#F8F4E3] px-3 py-1 text-xs text-[#5E503F]/80">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span>Online</span>
+        <div className="hidden items-center gap-2 rounded-full border border-[#E9E2C8] bg-[#F8F4E3] px-3 py-1 text-xs text-[#5E503F]/80 sm:flex">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              isOnline ? "bg-emerald-500" : "bg-amber-500"
+            }`}
+          />
+          <span>{isOnline ? "Online" : "Offline"}</span>
+          {pendingCount > 0 && <span>{pendingCount} pending</span>}
+          {failedQueueItems.length > 0 && <span>{failedQueueItems.length} failed</span>}
         </div>
+
+        <button
+          type="button"
+          onClick={() => void syncNow()}
+          disabled={!isOnline || isSyncing}
+          className="hidden rounded-full border border-[#E9E2C8] bg-[#F8F4E3] px-3 py-1 text-xs text-[#5E503F]/80 sm:inline-flex disabled:opacity-60"
+        >
+          {isSyncing ? "Syncing..." : lastSyncTime ? "Sync Now" : "Initial Sync"}
+        </button>
 
         <div className="relative" ref={notificationRef}>
           <button
             onClick={() => {
               setShowNotifications((prev) => !prev);
               setShowUserMenu(false);
-              setShowSettings(false);
             }}
             className="rounded-full p-2 text-[#5E503F]/70 hover:bg-[#EDE4C5]"
           >
@@ -244,104 +264,81 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-64 rounded-lg border border-[#E9E2C8] dark:border-gray-700 bg-[#F8F4E3] shadow-lg z-50 transition-colors duration-200">
-              {" "}
-              <div className="p-3 text-sm font-semibold border-b">
+            <div className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-[#E9E2C8] bg-[#F8F4E3] shadow-lg">
+              <div className="border-b p-3 text-sm font-semibold">
                 Notifications
               </div>
-              <div className="p-3 text-sm text-[#5E503F]">
-                No new notifications
+              <div className="space-y-2 p-3 text-sm text-[#5E503F]">
+                <div>
+                  Sync queue: {pendingCount} pending
+                  {failedQueueItems.length > 0 && `, ${failedQueueItems.length} failed`}
+                </div>
+                <div>
+                  Last sync: {lastSyncTime ? new Date(lastSyncTime).toLocaleString() : "Not synced yet"}
+                </div>
+                {failedQueueItems.length === 0 && <div>No new notifications</div>}
               </div>
             </div>
           )}
         </div>
 
-        <div className="relative" ref={settingsRef}>
-          <button
-            onClick={() => {
-              setShowSettings((prev) => !prev);
-              setShowNotifications(false);
-              setShowUserMenu(false);
-            }}
-            className="rounded-full p-2 text-[#5E503F]/70 hover:bg-[#EDE4C5]"
-          >
-            <GearIcon />
-          </button>
-
-          {showSettings && (
-            <div className="absolute right-0 mt-2 w-64 sm:w-56 rounded-lg border bg-[#F8F4E3] dark:border-gray-700 shadow-lg z-50">
-              <div className="px-4 py-3 text-sm font-semibold border-b border-[#E9E2C8] dark:border-gray-700 text-[#5E503F] dark:text-[#5E503F]">
-                {" "}
-                Settings
-              </div>
-
-              <div className="flex items-center justify-between px-4 py-3  transition">
-                <span className="text-sm text-[#5E503F] dark:text-[#5E503F]">
-                  Theme
-                </span>
-
-                <button
-                  onClick={toggleTheme}
-                  className={`relative w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
-                    isDark ? "bg-[#2A9D8F]" : "bg-gray-300"
-                  }`}
-                >
-                  <div
-                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 flex items-center justify-center text-xs ${
-                      isDark ? "translate-x-6" : "translate-x-0"
-                    }`}
-                  >
-                    {isDark ? "🌙" : "🌞"}
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="rounded-full p-2 text-[#5E503F]/70 hover:bg-[#EDE4C5]"
+        >
+          <GearIcon />
+        </button>
 
         <div className="relative" ref={userMenuRef}>
           <div
             onClick={() => {
               setShowUserMenu((prev) => !prev);
               setShowNotifications(false);
-              setShowSettings(false);
             }}
-            className="flex cursor-pointer items-center gap-2 rounded-full border border-[#E9E2C8] bg-[#F8F4E3] px-2 sm:px-3 py-1"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-[#E9E2C8] bg-[#F8F4E3] px-2 py-1 sm:px-3"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2A9D8F] text-sm font-semibold text-white">
               {userName
                 .split(" ")
-                .map((p) => p[0])
+                .map((part) => part[0])
                 .join("")
                 .slice(0, 2)
                 .toUpperCase()}
             </div>
 
-            <div className="hidden sm:block text-xs">
+            <div className="hidden text-xs sm:block">
               <div className="font-semibold text-[#5E503F]">{userName}</div>
-              <div className="text-[11px] text-[#5E503F]/70">Administrator</div>
+              <div className="text-[11px] text-[#5E503F]/70">{secondaryLabel}</div>
             </div>
 
-            <div className="hidden sm:block text-[#5E503F]/60">
+            <div className="hidden text-[#5E503F]/60 sm:block">
               <UserIcon />
             </div>
           </div>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-56 sm:w-64 rounded-xl border border-[#E9E2C8] dark:border-gray-700 bg-[#F8F4E3] shadow-xl z-50 transition-all duration-200">
-              {" "}
+            <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-[#E9E2C8] bg-[#F8F4E3] shadow-xl">
               <button
-                onClick={() => navigate("/profile")}
-                className="w-full px-4 py-2 text-left text-sm border-[#E9E2C8]"
+                onClick={() => navigate("/settings")}
+                className="w-full px-4 py-2 text-left text-sm text-[#5E503F]"
               >
-                Profile
+                Settings
+              </button>
+              <button
+                onClick={() =>
+                  navigate(user?.role === "superadmin" ? "/centres" : "/dashboard")
+                }
+                className="w-full px-4 py-2 text-left text-sm text-[#5E503F]"
+              >
+                {user?.role === "superadmin" ? "Manage Centres" : "Dashboard"}
               </button>
               <button
                 onClick={() => {
-                  localStorage.removeItem("token");
+                  clearSession();
                   navigate("/login");
                 }}
-                className="w-full px-4 py-2 text-left text-sm text-red-500 "
+                className="w-full px-4 py-2 text-left text-sm text-red-500"
               >
                 Logout
               </button>

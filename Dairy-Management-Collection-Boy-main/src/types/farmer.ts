@@ -14,6 +14,15 @@ export interface Farmer {
   status: FarmerStatus;
   joinDate: string;
   address?: string;
+  centreId?:
+    | string
+    | {
+        _id: string;
+        name: string;
+        code: string;
+        status: string;
+      }
+    | null;
 }
 
 export interface AddFarmerRequest {
@@ -21,6 +30,7 @@ export interface AddFarmerRequest {
   mobile: string;
   milkType: FarmerMilkType;
   address?: string;
+  centreId?: string;
 }
 
 export interface UpdateFarmerRequest {
@@ -29,4 +39,26 @@ export interface UpdateFarmerRequest {
   milkType?: MilkType[];
   address?: string;
   status?: FarmerStatus;
+}
+
+export interface FarmerTransferRecord {
+  _id: string;
+  farmerId: string;
+  fromCentreId: {
+    _id: string;
+    name: string;
+    code: string;
+  };
+  toCentreId: {
+    _id: string;
+    name: string;
+    code: string;
+  };
+  transferredBy?: {
+    _id: string;
+    name: string;
+    email: string;
+  } | null;
+  note: string;
+  createdAt: string;
 }

@@ -3,6 +3,53 @@ import Payment from "../models/Payment.js";
 import Bill from "../models/Bill.js";
 import { logAudit } from "../services/auditService.js";
 import { getScopedFilter } from "../utils/access.js";
+import { resolveBillStatusFromPaymentStatus } from "../utils/paymentStatus.js";
+
+const findPaymentByPayoutId = async (payoutId) => {
+  if (!payoutId) {
+    return null;
+  }
+
+  return Payment.findOne({ razorpayPayoutId: payoutId });
+};
+
+const updatePaymentAndBillStatus = async ({
+  payment,
+  status,
+  failureReason,
+  req,
+  event,
+}) => {
+  if (!payment) {
+    return null;
+  }
+
+  payment.status = status;
+  payment.failureReason = failureReason ?? payment.failureReason;
+  await payment.save();
+
+  if (payment.billId) {
+    await Bill.findByIdAndUpdate(payment.billId, {
+      status: resolveBillStatusFromPaymentStatus(status),
+    });
+  }
+
+  await logAudit({
+    req,
+    centreId: payment.centreId,
+    action: status === "processed" ? "payment_processed" : "payment_failed",
+    entityType: "Payment",
+    entityId: payment._id,
+    details: {
+      payoutId: payment.razorpayPayoutId,
+      event,
+      status,
+      failureReason: failureReason ?? null,
+    },
+  });
+
+  return payment;
+};
 
 
 const createRazorpayPayout = async ({
@@ -97,8 +144,7 @@ export const payBill = async (req, res) => {
       createdAt: new Date(),
     });
 
-    bill.status = "Paid";
-    await bill.save();
+
 
     await logAudit({
       req,
@@ -130,27 +176,48 @@ export const payBill = async (req, res) => {
 };
 
 export const razorpayWebhook = async (req, res) => {
-  const event = req.body.event;
+  try {
+    const event = req.body?.event;
+    const payoutEntity = req.body?.payload?.payout?.entity ?? null;
+    const payoutId = payoutEntity?.id;
 
-  if (event === "payout.processed") {
-    const payoutId = req.body.payload.payout.entity.id;
+    if (!event || !payoutId) {
+      return res.status(200).send("OK");
+    }
 
-    await Payment.findOneAndUpdate(
-      { razorpayPayoutId: payoutId },
-      { status: "processed" },
-    );
+    const payment = await findPaymentByPayoutId(payoutId);
+
+    if (!payment) {
+      return res.status(200).send("OK");
+    }
+
+    if (event === "payout.processed") {
+      await updatePaymentAndBillStatus({
+        payment,
+        status: "processed",
+        req,
+        event,
+      });
+    }
+
+    if (event === "payout.failed" || event === "payout.reversed") {
+      await updatePaymentAndBillStatus({
+        payment,
+        status: event === "payout.reversed" ? "reversed" : "failed",
+        failureReason:
+          payoutEntity?.status_details?.description ||
+          payoutEntity?.status_details?.reason ||
+          null,
+        req,
+        event,
+      });
+    }
+
+    return res.status(200).send("OK");
+  } catch (error) {
+    console.error("RAZORPAY WEBHOOK ERROR:", error.message);
+    return res.status(500).send("Webhook processing failed");
   }
-
-  if (event === "payout.failed") {
-    const payoutId = req.body.payload.payout.entity.id;
-
-    await Payment.findOneAndUpdate(
-      { razorpayPayoutId: payoutId },
-      { status: "failed" },
-    );
-  }
-
-  res.status(200).send("OK");
 };
 
 export const payAllBills = async (req, res) => {
@@ -246,6 +313,8 @@ export const getPayments = async (req, res) => {
   try {
     const payments = await Payment.find(getScopedFilter(req))
       .populate("billId", "periodFrom periodTo status")
+      .populate("farmerId", "name code")
+      .populate("centreId", "name code")
       .sort({ createdAt: -1 });
 
     res.json(payments);
@@ -260,6 +329,8 @@ export const getFarmerPayments = async (req, res) => {
       getScopedFilter(req, { farmerId: req.params.farmerId }),
     )
       .populate("billId", "periodFrom periodTo status")
+      .populate("farmerId", "name code")
+      .populate("centreId", "name code")
       .sort({ createdAt: -1 });
 
     res.json(payments);

@@ -8,6 +8,14 @@ export interface Bill {
   /** Human-readable bill number e.g. BILL-0001 */
   billNo: string;
 
+  centreId?:
+    | {
+        _id: string;
+        name: string;
+        code: string;
+      }
+    | null;
+
   farmerId: string;
   farmerCode: string;
   farmerName: string;

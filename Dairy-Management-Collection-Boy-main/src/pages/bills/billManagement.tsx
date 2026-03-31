@@ -1,19 +1,12 @@
 // src/pages/bills/billManagement.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import {
-  marathiFontBase64,
-  marathiFontBoldBase64,
-} from "../../utils/marathiFont";
-
 import InputField from "../../components/inputField";
 import SelectField from "../../components/selectField";
 import DataTable, { type DataTableColumn } from "../../components/dataTable";
 import StatCard from "../../components/statCard";
 import ConfirmModal from "../../components/confirmModal";
 import Loader from "../../components/loader";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import PayBillModal from "../payments/payBillModal";
 import type { Farmer } from "../../types/farmer";
 import type { Bill, BillStatus } from "../../types/bills";
@@ -525,12 +518,11 @@ const BillManagementPage: React.FC = () => {
   }));
 
   // Export PDF
-  // 1. Ensure you have the proper extended type for jsPDF
-  interface JsPDFWithAutoTable extends jsPDF {
+  type JsPDFWithAutoTable = InstanceType<typeof import("jspdf").default> & {
     lastAutoTable: {
       finalY: number;
     };
-  }
+  };
 
   // 1. Define specific interfaces for Deductions and Bonuses
   interface DeductionEntry {
@@ -544,13 +536,6 @@ const BillManagementPage: React.FC = () => {
     amount: number;
   }
 
-  // 2. Ensure jsPDF is extended to include the autoTable property
-  interface JsPDFWithAutoTable extends jsPDF {
-    lastAutoTable: {
-      finalY: number;
-    };
-  }
-
   const exportSingleBillPDF = async () => {
     if (scope !== "Single" || calculatedRows.length !== 1) {
       toast.error("PDF available only for single farmer bill.");
@@ -560,6 +545,14 @@ const BillManagementPage: React.FC = () => {
     const row: CalculatedBillRow = calculatedRows[0];
 
     try {
+      const [{ default: jsPDF }, { default: autoTable }, fontModule] =
+        await Promise.all([
+          import("jspdf"),
+          import("jspdf-autotable"),
+          import("../../utils/marathiFont"),
+        ]);
+      const { marathiFontBase64, marathiFontBoldBase64 } = fontModule;
+
       if (!marathiFontBase64 || marathiFontBase64.length < 10000) {
         throw new Error("Invalid Marathi font data.");
       }

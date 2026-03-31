@@ -1,31 +1,24 @@
-// src/storage/indexDb.ts
-
-/**
- * Simple IndexedDB helper for the dairy app.
- * Currently not used by pages, but ready for future use.
- *
- * Each object store uses `id` as primary key.
- */
-
 export const DB_NAME = "dairy_management_db";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const STORE_NAMES = {
   farmers: "farmers",
-  milkCollections: "milkCollections",
-  inventoryItems: "inventoryItems",
-  deductions: "deductions",
-  bills: "bills",
-  bonusRules: "bonusRules",
-  bonusPayments: "bonusPayments",
-  rateCharts: "rateCharts",
+  milkEntries: "milkEntries",
+  inventory: "inventory",
+  syncQueue: "syncQueue",
+  syncMeta: "syncMeta",
 } as const;
 
 export type StoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
 
-/**
- * Open (and create/upgrade) the IndexedDB database.
- */
+const STORE_CONFIG: Record<StoreName, { keyPath: string }> = {
+  [STORE_NAMES.farmers]: { keyPath: "_id" },
+  [STORE_NAMES.milkEntries]: { keyPath: "_id" },
+  [STORE_NAMES.inventory]: { keyPath: "_id" },
+  [STORE_NAMES.syncQueue]: { keyPath: "id" },
+  [STORE_NAMES.syncMeta]: { keyPath: "id" },
+};
+
 export function openDairyDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
@@ -42,23 +35,13 @@ export function openDairyDb(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
 
-      // Create object stores if they don't exist already
-      const ensureStore = (name: StoreName) => {
+      Object.entries(STORE_CONFIG).forEach(([name, config]) => {
         if (!db.objectStoreNames.contains(name)) {
           db.createObjectStore(name, {
-            keyPath: "_id",
+            keyPath: config.keyPath,
           });
         }
-      };
-
-      ensureStore(STORE_NAMES.farmers);
-      ensureStore(STORE_NAMES.milkCollections);
-      ensureStore(STORE_NAMES.inventoryItems);
-      ensureStore(STORE_NAMES.deductions);
-      ensureStore(STORE_NAMES.bills);
-      ensureStore(STORE_NAMES.bonusRules);
-      ensureStore(STORE_NAMES.bonusPayments);
-      ensureStore(STORE_NAMES.rateCharts);
+      });
     };
 
     request.onsuccess = () => {
@@ -67,9 +50,6 @@ export function openDairyDb(): Promise<IDBDatabase> {
   });
 }
 
-/**
- * Get all records from a store.
- */
 export async function dbGetAll<T>(storeName: StoreName): Promise<T[]> {
   const db = await openDairyDb();
   return new Promise<T[]>((resolve, reject) => {
@@ -82,9 +62,6 @@ export async function dbGetAll<T>(storeName: StoreName): Promise<T[]> {
   });
 }
 
-/**
- * Get a single record by id.
- */
 export async function dbGetById<T>(
   storeName: StoreName,
   id: IDBValidKey,
@@ -101,11 +78,7 @@ export async function dbGetById<T>(
   });
 }
 
-/**
- * Insert or update a record in a store.
- * Record must contain a unique `id` field.
- */
-export async function dbPut<T extends { _id: IDBValidKey }>(
+export async function dbPut<T extends object>(
   storeName: StoreName,
   value: T,
 ): Promise<IDBValidKey> {
@@ -120,9 +93,24 @@ export async function dbPut<T extends { _id: IDBValidKey }>(
   });
 }
 
-/**
- * Delete a record by id.
- */
+export async function dbBulkPut<T extends object>(
+  storeName: StoreName,
+  values: T[],
+): Promise<void> {
+  const db = await openDairyDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+
+    values.forEach((value) => {
+      store.put(value);
+    });
+
+    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => resolve();
+  });
+}
+
 export async function dbDelete(
   storeName: StoreName,
   id: IDBValidKey,
@@ -132,6 +120,18 @@ export async function dbDelete(
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
     const request = store.delete(id);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+}
+
+export async function dbClear(storeName: StoreName): Promise<void> {
+  const db = await openDairyDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    const request = store.clear();
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();

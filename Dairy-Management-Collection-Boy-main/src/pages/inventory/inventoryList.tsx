@@ -6,6 +6,13 @@ import StatCard from "../../components/statCard";
 import InputField from "../../components/inputField";
 import SelectField from "../../components/selectField";
 import ConfirmModal from "../../components/confirmModal";
+import { useSyncContext } from "../../context/SyncContext";
+import {
+  dbBulkPut,
+  dbDelete,
+  dbPut,
+  STORE_NAMES,
+} from "../../storage/indexDb";
 import type { InventoryCategory, InventoryItem } from "../../types/inventory";
 import { sellInventoryToFarmer } from "../../axios/inventory_transaction_api";
 import { getFarmers } from "../../axios/farmer_api";
@@ -17,8 +24,26 @@ import {
 } from "../../axios/inventory_api";
 import toast from "react-hot-toast";
 
+const isNetworkFailure = (error: unknown) =>
+  typeof error === "object" && error !== null && !("response" in error);
+
+const isOfflinePlaceholder = (item: InventoryItem) => item._id.startsWith("offline-");
+
 const InventoryListPage: React.FC = () => {
   const navigate = useNavigate();
+  const {
+    failedQueueItems,
+    getCachedFarmers,
+    getCachedInventory,
+    isOnline,
+    isSyncing,
+    lastSyncTime,
+    pendingCount,
+    queueInventoryDelete,
+    queueInventorySale,
+    queueInventoryUpdate,
+    syncNow,
+  } = useSyncContext();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<
@@ -60,25 +85,68 @@ const InventoryListPage: React.FC = () => {
   // delete target
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
+  const inventorySyncFailures = useMemo(
+    () => failedQueueItems.filter((item) => item.entityType === "inventoryItem"),
+    [failedQueueItems],
+  );
+
+  const loadInventory = React.useCallback(async () => {
+    try {
+      const cachedItems = await getCachedInventory();
+      const pendingItems = cachedItems.filter(
+        (item) => item.syncStatus === "pending" || isOfflinePlaceholder(item),
+      );
+
+      if (isOnline) {
         const res = await getInventoryItems();
-        setItems(res.data);
-      } catch (err) {
-        console.error("Failed to load inventory:", err);
+        const syncedItems = res.data.map((item) => ({
+          ...item,
+          syncStatus: "synced" as const,
+        }));
+
+        await dbBulkPut(STORE_NAMES.inventory, syncedItems);
+
+        const merged = [...pendingItems, ...syncedItems].filter(
+          (item, index, array) =>
+            array.findIndex((candidate) => candidate._id === item._id) === index,
+        );
+        setItems(merged);
+        return;
       }
-    };
-    load();
-  }, []);
+
+      setItems(cachedItems);
+    } catch (err) {
+      console.error("Failed to load inventory:", err);
+      const cachedItems = await getCachedInventory();
+      setItems(cachedItems);
+      toast.error("Loaded cached inventory data.");
+    }
+  }, [getCachedInventory, isOnline]);
+
+  const loadFarmersData = React.useCallback(async () => {
+    try {
+      if (isOnline) {
+        const res = await getFarmers();
+        setFarmers(res.data);
+        return;
+      }
+
+      const cachedFarmers = await getCachedFarmers();
+      setFarmers(cachedFarmers);
+    } catch (error) {
+      console.error("Failed to load farmers:", error);
+      const cachedFarmers = await getCachedFarmers();
+      setFarmers(cachedFarmers);
+    }
+  }, [getCachedFarmers, isOnline]);
 
   useEffect(() => {
-    const loadFarmers = async () => {
-      const res = await getFarmers();
-      setFarmers(res.data);
-    };
-    loadFarmers();
-  }, []);
+    void loadInventory();
+  }, [loadInventory]);
+
+  useEffect(() => {
+    void loadFarmersData();
+  }, [loadFarmersData]);
 
   const openSellModal = (item: InventoryItem) => {
     setSellItem(item);
@@ -91,13 +159,50 @@ const InventoryListPage: React.FC = () => {
   const handleSell = async () => {
     if (!sellItem) return;
 
+    if (isOfflinePlaceholder(sellItem)) {
+      toast.error("Sync the new item first before selling it.");
+      return;
+    }
+
     const qty = parseFloat(sellQty);
     if (!qty || qty <= 0) {
       toast.error("Enter valid quantity");
       return;
     }
 
+    if ((sellItem.currentStock ?? 0) < qty) {
+      toast.error("Insufficient stock");
+      return;
+    }
+
+    const optimisticItem: InventoryItem = {
+      ...sellItem,
+      currentStock: sellItem.currentStock - qty,
+      updatedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+      syncStatus: isOnline ? "synced" : "pending",
+    };
+
     try {
+      if (!isOnline) {
+        await queueInventorySale({
+          item: optimisticItem,
+          payload: {
+            farmerId: sellFarmerId,
+            itemId: sellItem._id,
+            quantity: qty,
+            paymentMethod,
+            paidAmount: paidAmount ? parseFloat(paidAmount) : 0,
+          },
+        });
+        setItems((prev) =>
+          prev.map((item) => (item._id === optimisticItem._id ? optimisticItem : item)),
+        );
+        setSellItem(null);
+        toast.success("Inventory sale queued for sync.");
+        return;
+      }
+
       await sellInventoryToFarmer({
         farmerId: sellFarmerId,
         itemId: sellItem._id,
@@ -109,13 +214,37 @@ const InventoryListPage: React.FC = () => {
       toast.success("Item sold to farmer");
 
       // refresh inventory list
-      const res = await getInventoryItems();
-      setItems(res.data);
+      await loadInventory();
 
       setSellItem(null);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
-      toast.error("Failed to sell item");
+      if (isNetworkFailure(err)) {
+        await queueInventorySale({
+          item: {
+            ...optimisticItem,
+            syncStatus: "pending",
+          },
+          payload: {
+            farmerId: sellFarmerId,
+            itemId: sellItem._id,
+            quantity: qty,
+            paymentMethod,
+            paidAmount: paidAmount ? parseFloat(paidAmount) : 0,
+          },
+        });
+        setItems((prev) =>
+          prev.map((item) =>
+            item._id === optimisticItem._id
+              ? { ...optimisticItem, syncStatus: "pending" }
+              : item,
+          ),
+        );
+        setSellItem(null);
+        toast.success("Network unavailable. Sale saved offline.");
+      } else {
+        toast.error("Failed to sell item");
+      }
     }
   };
 
@@ -166,6 +295,11 @@ const InventoryListPage: React.FC = () => {
   const applyStockChange = async () => {
     if (!stockModalItem) return;
 
+    if (isOfflinePlaceholder(stockModalItem)) {
+      toast.error("Sync the new item first before changing stock.");
+      return;
+    }
+
     const qty = parseFloat(stockQty);
     if (!qty || qty <= 0) {
       toast.error("Enter quantity greater than 0.");
@@ -177,19 +311,78 @@ const InventoryListPage: React.FC = () => {
         ? stockModalItem.currentStock + qty
         : stockModalItem.currentStock - qty;
 
+    const updatedItem: InventoryItem = {
+      ...stockModalItem,
+      currentStock: newStock,
+      updatedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+      syncStatus: isOnline ? "synced" : "pending",
+    };
+
     try {
+      if (!isOnline) {
+        await queueInventoryUpdate({
+          item: updatedItem,
+          payload: {
+            id: stockModalItem._id,
+            fields: {
+              currentStock: newStock,
+            },
+          },
+        });
+
+        setItems((prev) =>
+          prev.map((item) => (item._id === updatedItem._id ? updatedItem : item)),
+        );
+        setStockModalItem(null);
+        toast.success("Stock change queued for sync.");
+        return;
+      }
+
       const res = await updateInventoryItem(stockModalItem._id, {
         currentStock: newStock,
       });
 
+      await dbPut(STORE_NAMES.inventory, {
+        ...res.data,
+        syncStatus: "synced",
+      });
+
       setItems((prev) =>
-        prev.map((i) => (i._id === res.data._id ? res.data : i)),
+        prev.map((i) =>
+          i._id === res.data._id ? { ...res.data, syncStatus: "synced" } : i,
+        ),
       );
 
       setStockModalItem(null);
     } catch (err) {
       console.error("Stock update failed:", err);
-      toast.error("Failed to update stock");
+
+      if (isNetworkFailure(err)) {
+        await queueInventoryUpdate({
+          item: {
+            ...updatedItem,
+            syncStatus: "pending",
+          },
+          payload: {
+            id: stockModalItem._id,
+            fields: {
+              currentStock: newStock,
+            },
+          },
+        });
+        setItems((prev) =>
+          prev.map((item) =>
+            item._id === updatedItem._id
+              ? { ...updatedItem, syncStatus: "pending" }
+              : item,
+          ),
+        );
+        setStockModalItem(null);
+        toast.success("Network unavailable. Stock change saved offline.");
+      } else {
+        toast.error("Failed to update stock");
+      }
     }
   };
 
@@ -222,27 +415,87 @@ const InventoryListPage: React.FC = () => {
     if (!editItem) return;
     if (!validateEdit()) return;
 
+    if (isOfflinePlaceholder(editItem)) {
+      toast.error("Sync the new item first before editing it.");
+      return;
+    }
+
+    const updatedFields = {
+      name: editName.trim(),
+      category: editCategory,
+      unit: editUnit.trim(),
+      minStock: parseFloat(editMinStock) || 0,
+      purchaseRate: editPurchaseRate ? parseFloat(editPurchaseRate) : undefined,
+      sellingRate: editSellingRate ? parseFloat(editSellingRate) : undefined,
+    };
+
+    const queuedItem: InventoryItem = {
+      ...editItem,
+      ...updatedFields,
+      updatedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+      syncStatus: isOnline ? "synced" : "pending",
+    };
+
     try {
-      const res = await updateInventoryItem(editItem._id, {
-        name: editName.trim(),
-        category: editCategory,
-        unit: editUnit.trim(),
-        minStock: parseFloat(editMinStock) || 0,
-        purchaseRate: editPurchaseRate
-          ? parseFloat(editPurchaseRate)
-          : undefined,
-        sellingRate: editSellingRate ? parseFloat(editSellingRate) : undefined,
+      if (!isOnline) {
+        await queueInventoryUpdate({
+          item: queuedItem,
+          payload: {
+            id: editItem._id,
+            fields: updatedFields,
+          },
+        });
+
+        setItems((prev) =>
+          prev.map((item) => (item._id === queuedItem._id ? queuedItem : item)),
+        );
+        toast.success("Inventory edit queued for sync");
+        setEditItem(null);
+        return;
+      }
+
+      const res = await updateInventoryItem(editItem._id, updatedFields);
+
+      await dbPut(STORE_NAMES.inventory, {
+        ...res.data,
+        syncStatus: "synced",
       });
 
       setItems((prev) =>
-        prev.map((i) => (i._id === res.data._id ? res.data : i)),
+        prev.map((i) =>
+          i._id === res.data._id ? { ...res.data, syncStatus: "synced" } : i,
+        ),
       );
       toast.success("Inventory item updated successfully");
 
       setEditItem(null);
     } catch (err) {
       console.error("Edit failed:", err);
-      toast.error("Failed to save changes");
+
+      if (isNetworkFailure(err)) {
+        await queueInventoryUpdate({
+          item: {
+            ...queuedItem,
+            syncStatus: "pending",
+          },
+          payload: {
+            id: editItem._id,
+            fields: updatedFields,
+          },
+        });
+        setItems((prev) =>
+          prev.map((item) =>
+            item._id === queuedItem._id
+              ? { ...queuedItem, syncStatus: "pending" }
+              : item,
+          ),
+        );
+        toast.success("Network unavailable. Inventory edit saved offline.");
+        setEditItem(null);
+      } else {
+        toast.error("Failed to save changes");
+      }
     }
   };
 
@@ -251,15 +504,47 @@ const InventoryListPage: React.FC = () => {
   const deleteItem = async () => {
     if (!deleteTarget) return;
 
+    if (isOfflinePlaceholder(deleteTarget)) {
+      toast.error("Sync the new item first before deleting it.");
+      return;
+    }
+
     try {
+      if (!isOnline) {
+        await queueInventoryDelete({
+          itemId: deleteTarget._id,
+          payload: {
+            id: deleteTarget._id,
+          },
+        });
+        setItems((prev) => prev.filter((i) => i._id !== deleteTarget._id));
+        toast.success("Inventory delete queued for sync");
+        setDeleteTarget(null);
+        return;
+      }
+
       await deleteInventoryItem(deleteTarget._id);
+      await dbDelete(STORE_NAMES.inventory, deleteTarget._id);
       setItems((prev) => prev.filter((i) => i._id !== deleteTarget._id));
       toast.success("Inventory item deleted");
 
       setDeleteTarget(null);
     } catch (err) {
       console.error("Delete failed:", err);
-      toast.error("Failed to delete item");
+
+      if (isNetworkFailure(err)) {
+        await queueInventoryDelete({
+          itemId: deleteTarget._id,
+          payload: {
+            id: deleteTarget._id,
+          },
+        });
+        setItems((prev) => prev.filter((i) => i._id !== deleteTarget._id));
+        toast.success("Network unavailable. Delete saved offline.");
+        setDeleteTarget(null);
+      } else {
+        toast.error("Failed to delete item");
+      }
     }
   };
 
@@ -339,6 +624,22 @@ const InventoryListPage: React.FC = () => {
           : "-",
     },
     {
+      id: "sync",
+      header: "Sync",
+      align: "center",
+      cell: (row) => (
+        <span
+          className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${
+            row.syncStatus === "pending"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-emerald-100 text-emerald-700"
+          }`}
+        >
+          {row.syncStatus === "pending" ? "Pending" : "Synced"}
+        </span>
+      ),
+    },
+    {
       id: "actions",
       header: "Actions",
       align: "center",
@@ -347,6 +648,7 @@ const InventoryListPage: React.FC = () => {
           <button
             type="button"
             onClick={() => openStockModal(row, "in")}
+            disabled={isOfflinePlaceholder(row)}
             className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-[#2A9D8F] hover:bg-[#F8F4E3]"
           >
             Stock In
@@ -354,6 +656,7 @@ const InventoryListPage: React.FC = () => {
           <button
             type="button"
             onClick={() => openStockModal(row, "out")}
+            disabled={isOfflinePlaceholder(row)}
             className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-[#E76F51] hover:bg-[#F8F4E3]"
           >
             Stock Out
@@ -362,6 +665,7 @@ const InventoryListPage: React.FC = () => {
           <button
             type="button"
             onClick={() => openEdit(row)}
+            disabled={isOfflinePlaceholder(row)}
             className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-[#5E503F] hover:bg-[#F8F4E3]"
           >
             Edit
@@ -369,6 +673,7 @@ const InventoryListPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setDeleteTarget(row)}
+            disabled={isOfflinePlaceholder(row)}
             className="rounded-md border border-[#E9E2C8] bg-white px-2 py-1 text-[#E76F51] hover:bg-[#E76F51]/10"
           >
             Delete
@@ -376,7 +681,8 @@ const InventoryListPage: React.FC = () => {
           <button
             type="button"
             onClick={() => openSellModal(row)}
-            className="rounded-md border border-[#E9E2C8 px-2 py-1 bg-[#2A9D8F] text-white hover:bg-[#F8F4E3]"
+            disabled={!isOnline || isOfflinePlaceholder(row)}
+            className="rounded-md bg-[#2A9D8F] px-2 py-1 text-white disabled:opacity-60"
           >
             Sell
           </button>
@@ -431,6 +737,49 @@ const InventoryListPage: React.FC = () => {
             variant="blue"
             subtitle={undefined}
           />
+        </div>
+
+        <div className="rounded-xl border border-[#E9E2C8] bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#5E503F]/70">
+              <span
+                className={`rounded-full px-2 py-1 ${
+                  isOnline
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {isOnline ? "Online" : "Offline"}
+              </span>
+              <span>{pendingCount} pending sync</span>
+              <span>{inventorySyncFailures.length} failed inventory actions</span>
+              <span>
+                Last sync:{" "}
+                {lastSyncTime ? new Date(lastSyncTime).toLocaleString() : "Not synced yet"}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void syncNow()}
+              disabled={!isOnline || isSyncing}
+              className="rounded-md border border-[#E9E2C8] bg-white px-3 py-2 text-xs font-medium text-[#247B71] disabled:opacity-60"
+            >
+              {isSyncing ? "Syncing..." : "Sync now"}
+            </button>
+          </div>
+
+          {inventorySyncFailures.length > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <div className="font-semibold">Sync diagnostics</div>
+              <div className="mt-1">
+                {inventorySyncFailures
+                  .slice(0, 3)
+                  .map((item) => item.lastError || "Sync failed")
+                  .join(" | ")}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filters */}

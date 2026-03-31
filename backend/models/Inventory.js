@@ -42,10 +42,16 @@ const inventorySchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    clientGeneratedId: {
+      type: String,
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true },
 );
 
 inventorySchema.index({ centreId: 1, createdAt: -1 });
+inventorySchema.index({ centreId: 1, clientGeneratedId: 1 });
 
 export default mongoose.model("Inventory", inventorySchema);

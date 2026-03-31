@@ -31,6 +31,8 @@ export interface InventoryItem {
   sellingRate?: number;
   /** ISO date string (YYYY-MM-DD) when last stock change happened */
   lastUpdated: string;
+  clientGeneratedId?: string | null;
+  syncStatus?: "pending" | "synced";
 }
 
 export interface InventoryMovement {

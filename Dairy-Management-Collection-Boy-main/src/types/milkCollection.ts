@@ -41,4 +41,7 @@ _id: string;
 
   /** ISO datetime string when entry was created */
   createdAt: string;
+  updatedAt?: string;
+  clientGeneratedId?: string | null;
+  syncStatus?: "synced" | "pending";
 }
