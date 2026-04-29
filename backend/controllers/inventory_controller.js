@@ -2,7 +2,7 @@ import Inventory from "../models/Inventory.js";
 
 export const addInventory = async (req, res) => {
   try {
-    const last = await Inventory.findOne().sort({ createdAt: -1 });
+    const last = await Inventory.findOne({ centerId: req.user.centerId, }).sort({ createdAt: -1 });
 
     const nextNumber = last ? parseInt(last.code.replace("I", ""), 10) + 1 : 1;
 
@@ -17,6 +17,7 @@ export const addInventory = async (req, res) => {
       minStock: req.body.minStock ?? 0,
       purchaseRate: req.body.purchaseRate ?? 0,
       sellingRate: req.body.sellingRate ?? 0,
+      centerId: req.user.centerId,
     });
 
     res.status(201).json(item);
@@ -27,7 +28,7 @@ export const addInventory = async (req, res) => {
 
 export const getInventory = async (req, res) => {
   try {
-    const items = await Inventory.find().sort({ createdAt: -1 });
+    const items = await Inventory.find({ centerId: req.user.centerId }).sort({ createdAt: -1 });
     res.json(items);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -95,7 +96,7 @@ export const updateInventory = async (req, res) => {
 
 export const getInventoryReport = async (req, res) => {
   try {
-    const items = await Inventory.find();
+    const items = await Inventory.find({ centerId: req.user.centerId, });
 
     let totalValue = 0;
     let lowStock = 0;
@@ -125,8 +126,8 @@ export const getInventoryReport = async (req, res) => {
           stock <= 0
             ? "Out of Stock"
             : stock < min
-            ? "Low Stock"
-            : "In Stock",
+              ? "Low Stock"
+              : "In Stock",
         updatedAt: i.updatedAt,
       };
     });

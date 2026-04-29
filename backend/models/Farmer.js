@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const farmerSchema = new mongoose.Schema(
   {
+    centerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Center",
+      required: true
+    },
     code: {
       type: String,
       unique: true,
@@ -19,7 +24,7 @@ const farmerSchema = new mongoose.Schema(
     },
     milkType: {
       type: [String],
-      enum: ["cow", "buffalo","mix"],
+      enum: ["cow", "buffalo", "mix"],
       required: true,
     },
     address: {
@@ -39,6 +44,8 @@ const farmerSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Index centerId for faster queries by center
+farmerSchema.index({ centerId: 1 });
 /*  Auto-generate farmer code */
 farmerSchema.pre("save", async function () {
   if (this.code) return;

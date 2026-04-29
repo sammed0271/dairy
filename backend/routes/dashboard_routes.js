@@ -1,5 +1,4 @@
 import express from "express";
-import { protect } from "../middleware/auth_middleware.js";
 import {
   getTodayDashboardStats,
   getMonthlyDashboardStats,

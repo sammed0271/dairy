@@ -1,5 +1,4 @@
 import express from "express";
-import { protect } from "../middleware/auth_middleware.js";
 import {
   deleteBill,
   generateBill,
@@ -14,8 +13,8 @@ const router = express.Router();
 router.post("/generate", generateBill);
 router.get("/", getBills);
 router.post("/preview", previewBill);
-router.delete("/:id", deleteBill); 
-router.put("/:id/pay", markBillAsPaid); 
+router.delete("/:id", deleteBill);
+router.put("/:id/pay", markBillAsPaid);
 router.post("/details", getBillDetails);
 
 export default router;

@@ -52,9 +52,15 @@ export const loginUser = async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ message: "Invalid password" });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+        centerId: user.centerId || null,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d", }
+    );
 
     return res.status(200).json({
       message: "Login Successfully",
@@ -63,6 +69,8 @@ export const loginUser = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
+        centerId: user.centerId || null,
       },
     });
   } catch (err) {

@@ -9,7 +9,7 @@ export const dailyMilkReport = async (req, res) => {
   try {
     const { date } = req.query;
 
-    const entries = await Milk.find({ date })
+    const entries = await Milk.find({ date: this.date, centerId: req.user.centerId, })
       .populate("farmerId", "name mobile")
       .sort({ shift: 1 });
 
@@ -52,6 +52,7 @@ export const milkTypeReport = async (req, res) => {
     const data = await Milk.aggregate([
       {
         $match: {
+          centerId: req.user.centerId,
           date: { $gte: from, $lte: to },
         },
       },
@@ -96,6 +97,7 @@ export const getBillingReportByRange = async (req, res) => {
     }
 
     const bills = await Bill.find({
+      centerId: req.user.centerId,
       periodFrom: { $lte: to },
       periodTo: { $gte: from },
     })
@@ -141,7 +143,7 @@ export const getBillingReportByRange = async (req, res) => {
 ================================ */
 export const inventoryReport = async (req, res) => {
   try {
-    const items = await Inventory.find();
+    const items = await Inventory.find({ centerId: req.user.centerId, });
 
     const summary = items.reduce(
       (acc, i) => {
@@ -173,6 +175,7 @@ export const milkReportByRange = async (req, res) => {
     }
 
     const entries = await Milk.find({
+      centerId: req.user.centerId,
       date: { $gte: from, $lte: to },
     }).populate("farmerId", "code name");
 

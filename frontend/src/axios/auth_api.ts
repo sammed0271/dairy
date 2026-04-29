@@ -7,6 +7,8 @@ export interface AuthResponse {
     _id: string;
     name: string;
     email: string;
+    role: string;
+    centerId: string | null;
   };
 }
 

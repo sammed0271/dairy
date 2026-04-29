@@ -12,30 +12,32 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
- const handleLogin = async () => {
-    
-  setError(null);
+  const handleLogin = async () => {
 
-  if (!email || !password) {
-    setError("All fields are required");
-    return;
-  }
+    setError(null);
 
-  try {
-    setLoading(true);
-    const res = await loginUser({ email, password });
+    if (!email || !password) {
+      setError("All fields are required");
+      return;
+    }
 
-    const { token } = res.data; 
-    localStorage.setItem("token", token);
+    try {
+      setLoading(true);
+      const res = await loginUser({ email, password });
 
-    navigate("/dashboard");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
-    setError("Invalid email or password ");
-  } finally {
-    setLoading(false);
-  }
-};
+      const { token } = res.data;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      console.log("Login successful:", res.data);
+
+      navigate("/dashboard");
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (err) {
+      setError("Invalid email or password ");
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   return (

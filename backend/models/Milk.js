@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const milkSchema = new mongoose.Schema(
   {
+    centerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Center",
+      required: true,
+      index: true,
+    },
     farmerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Farmer",

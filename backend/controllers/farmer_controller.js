@@ -17,6 +17,8 @@ export const addFarmer = async (req, res) => {
         .json({ message: "Mix cannot combine with cow/buffalo" });
     }
 
+    req.body.centerId = req.user.centerId;
+
     const farmer = await Farmer.create(req.body);
 
     res.status(201).json(farmer);
@@ -28,7 +30,7 @@ export const addFarmer = async (req, res) => {
 
 export const getFarmers = async (req, res) => {
   try {
-    const farmers = await Farmer.find().sort({ createdAt: -1 });
+    const farmers = await Farmer.find({ centerId: req.user.centerId }).sort({ createdAt: -1 });
 
     res.json(farmers);
   } catch (err) {
@@ -76,6 +78,7 @@ export const updateFarmer = async (req, res) => {
     }
 
     req.body.milkType = milkType;
+    req.body.centerId = req.user.centerId;
 
     const farmer = await Farmer.findByIdAndUpdate(id, req.body, {
       new: true,

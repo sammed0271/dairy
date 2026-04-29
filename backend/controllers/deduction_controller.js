@@ -11,11 +11,12 @@ export const addDeduction = async (req, res) => {
     }
 
     const deduction = await Deduction.create({
+      centerId: req.user.centerId,
       farmerId,
       date,
       category,
       amount,
-      remainingAmount: amount, 
+      remainingAmount: amount,
       note: description || "",
       status: "Pending",
     });
@@ -76,7 +77,7 @@ export const clearDeduction = async (req, res) => {
 
 export const getDeductions = async (req, res) => {
   try {
-    const deductions = await Deduction.find().populate("farmerId", "name code");
+    const deductions = await Deduction.find({ centerId: req.user.centerId }).populate("farmerId", "name code");
 
     const formatted = await Promise.all(
       deductions.map(async (d) => {
@@ -99,6 +100,7 @@ export const getDeductions = async (req, res) => {
               },
             },
           ]);
+          console.log("Milk agg for deduction", d._id, milkAgg[0]?.total);
 
           const milkAmount = milkAgg[0]?.total || 0;
 

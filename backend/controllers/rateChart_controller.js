@@ -134,11 +134,11 @@ const generateRatesFromRange = (
  */
 export const getRateCharts = async (req, res) => {
   try {
-    let cow = await RateChart.findOne({ milkType: "cow" }).sort({
+    let cow = await RateChart.findOne({ centerId: req.user.centerId, milkType: "cow" }).sort({
       effectiveFrom: -1,
     });
 
-    let buffalo = await RateChart.findOne({ milkType: "buffalo" }).sort({
+    let buffalo = await RateChart.findOne({ centerId: req.user.centerId, milkType: "buffalo" }).sort({
       effectiveFrom: -1,
     });
 
@@ -149,7 +149,7 @@ export const getRateCharts = async (req, res) => {
     if (!buffalo) {
       buffalo = await RateChart.create(defaultRateChart("buffalo"));
     }
-    let mix = await RateChart.findOne({ milkType: "mix" }).sort({
+    let mix = await RateChart.findOne({ centerId: req.user.centerId, milkType: "mix" }).sort({
       effectiveFrom: -1,
     });
 
@@ -193,6 +193,7 @@ export const updateRateChart = async (req, res) => {
 
     await RateChartHistory.create({
       ...historyData,
+      centerId: req.user.centerId,
       milkType,
       effectiveFrom,
       savedBy: req.user?._id || null,
@@ -200,7 +201,7 @@ export const updateRateChart = async (req, res) => {
     });
 
     const updated = await RateChart.findOneAndUpdate(
-      { milkType },
+      { milkType: this.milkType, centerId: req.user.centerId, },
       {
         ...historyData,
         milkType,
@@ -230,6 +231,7 @@ export const getRateForMilk = async (req, res) => {
     }
 
     const chart = await RateChart.findOne({
+      centerId: req.user.centerId,
       milkType,
       effectiveFrom: { $lte: date },
     }).sort({ effectiveFrom: -1 });
@@ -270,6 +272,7 @@ export const getRateConfig = async (req, res) => {
   const { milkType, date } = req.query;
 
   const chart = await RateChart.findOne({
+    centerId: req.user.centerId,
     milkType,
     effectiveFrom: { $lte: date },
   }).sort({ effectiveFrom: -1 });
@@ -285,6 +288,6 @@ export const getRateConfig = async (req, res) => {
     snfMax: chart.snfMax,
     fats: chart.fats,
     snfs: chart.snfs,
-    rateChart: chart.rates, 
+    rateChart: chart.rates,
   });
 };

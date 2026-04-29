@@ -4,6 +4,12 @@ import mongoose from "mongoose";
 
 const saleSchema = new mongoose.Schema(
   {
+    centerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Center",
+      required: true,
+      index: true,
+    },
     type: {
       type: String,
       enum: ["MILK", "PRODUCT"],

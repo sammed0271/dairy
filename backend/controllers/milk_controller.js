@@ -22,6 +22,7 @@ export const addMilkEntry = async (req, res) => {
       return res.status(400).json({ message: "Invalid farmer" });
     }
 
+
     // const milkType = farmer.milkType.toLowerCase();
     if (!farmer.milkType.includes(milkType)) {
       return res.status(400).json({
@@ -74,6 +75,7 @@ export const addMilkEntry = async (req, res) => {
 
     // 3. Save milk entry
     const milk = await Milk.create({
+      centerId: req.user.centerId,
       farmerId,
       date,
       shift,
@@ -104,6 +106,7 @@ export const getMilkEntries = async (req, res) => {
     const { date, farmerId } = req.query;
 
     let filter = {};
+    filter.centerId = req.user.centerId;
     if (date) filter.date = date;
     if (farmerId) filter.farmerId = farmerId;
 
@@ -127,7 +130,7 @@ export const getMilkEntries = async (req, res) => {
         snf: m.snf,
         rate: m.rate,
         amount: m.totalAmount,
-        mode:m.mode
+        mode: m.mode
       }));
 
     res.json(formatted);
@@ -172,6 +175,7 @@ export const updateMilkEntry = async (req, res) => {
         message: "Edit allowed only on next day",
       });
     }
+    req.body.centerId = req.user.centerId;
 
     const updated = await Milk.findByIdAndUpdate(id, req.body, {
       new: true,

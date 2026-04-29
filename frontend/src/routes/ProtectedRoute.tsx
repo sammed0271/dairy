@@ -1,7 +1,7 @@
 import React from "react";
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 
-const ProtectedRoute: React.FC = () => {
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem("token");
 
   // DEBUG (remove later)
@@ -11,7 +11,7 @@ const ProtectedRoute: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />; 
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

@@ -5,6 +5,9 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectDB } from "./config/db.js";
+
+import { protect } from "./middleware/auth_middleware.js";
+
 import router from "./routes/auth_routes.js";
 import farmerRoutes from "./routes/farmer_routes.js";
 import milkRoutes from "./routes/milk_routes.js";
@@ -57,18 +60,18 @@ app.use((req, res, next) => {
   next();
 });
 app.use("/api/auth", router);
-app.use("/api/farmers", farmerRoutes);
-app.use("/api/milk", milkRoutes);
-app.use("/api/deductions", deductionRoutes);
-app.use("/api/inventory", inventoryRoutes);
-app.use("/api/bonus", bonusRoutes);
-app.use("/api/bills", billRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/rate-chart", rateChartRoutes);
-app.use("/api/reports", reportRoutes);
-app.use("/api/inventory-transactions", inventoryTransactionRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/sales", saleRoutes);
+app.use("/api/farmers", protect, farmerRoutes);
+app.use("/api/milk", protect, milkRoutes);
+app.use("/api/deductions", protect, deductionRoutes);
+app.use("/api/inventory", protect, inventoryRoutes);
+app.use("/api/bonus", protect, bonusRoutes);
+app.use("/api/bills", protect, billRoutes);
+app.use("/api/dashboard", protect, dashboardRoutes);
+app.use("/api/rate-chart", protect, rateChartRoutes);
+app.use("/api/reports", protect, reportRoutes);
+app.use("/api/inventory-transactions", protect, inventoryTransactionRoutes);
+app.use("/api/payments", protect, paymentRoutes);
+app.use("/api/sales", protect, saleRoutes);
 app.use("/api/machine", machineRoutes);
 app.use("/api", healthRoutes);
 

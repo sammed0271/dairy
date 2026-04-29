@@ -5,7 +5,7 @@ export const getTodayDashboardStats = async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
 
-    const collections = await Milk.find({ date: today });
+    const collections = await Milk.find({ centerId: req.user.centerId, date: today });
 
     const result = {
       morning: {
@@ -60,7 +60,7 @@ export const getMonthlyDashboardStats = async (req, res) => {
       .toISOString()
       .slice(0, 10);
 
-    const collections = await Milk.find({ date: { $gte: start } });
+    const collections = await Milk.find({ centerId: req.user.centerId, date: { $gte: start } });
 
     let totalLiters = 0;
     let cowLiters = 0;
@@ -101,7 +101,7 @@ export const getTopFarmers = async (req, res) => {
       .slice(0, 10);
 
     const result = await Milk.aggregate([
-      { $match: { date: { $gte: start } } },
+      { $match: { centerId: req.user.centerId, date: { $gte: start } } },
       {
         $group: {
           _id: "$farmerId",

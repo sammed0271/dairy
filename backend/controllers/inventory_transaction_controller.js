@@ -5,7 +5,7 @@ export const sellInventoryToFarmer = async (req, res) => {
   try {
     const { farmerId, itemId, quantity, paymentMethod, paidAmount } = req.body;
 
-    const item = await Inventory.findById(itemId);
+    const item = await Inventory.findById({ _id: itemId, centerID: req.user.centerId, });
 
     if (!item) return res.status(404).json({ message: "Item not found" });
 
@@ -21,6 +21,8 @@ export const sellInventoryToFarmer = async (req, res) => {
     await item.save();
 
     const transaction = await InventoryTransaction.create({
+      centerId: req.user.centerId,
+
       farmerId,
       itemId,
       quantity,
@@ -33,13 +35,15 @@ export const sellInventoryToFarmer = async (req, res) => {
 
     res.status(201).json(transaction);
   } catch (err) {
+    console.error("sellInventoryToFarmer error:", err);
+
     res.status(500).json({ message: err.message });
   }
 };
 
 export const getInventoryTransactions = async (req, res) => {
   try {
-    const data = await InventoryTransaction.find()
+    const data = await InventoryTransaction.find({ centerId: req.user.centerId, })
       .populate("farmerId", "name")
       .populate("itemId", "name code")
       .sort({ createdAt: -1 });

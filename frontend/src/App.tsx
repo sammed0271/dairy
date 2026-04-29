@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { lazy, Suspense,useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import Loader from "./components/loader";
 import SellDashboard from "./pages/sell/SellDashboard";
@@ -7,6 +7,9 @@ import AddSale from "./pages/sell/AddSale";
 
 import { syncMilkData } from "./utils/syncMilk";
 
+import ProtectedRoute from "./routes/ProtectedRoute";
+
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 
 const MainLayout = lazy(() => import("./layout/mainLayout"));
 
@@ -44,17 +47,17 @@ export const ReportsLayout = () => {
 
 const App: React.FC = () => {
   useEffect(() => {
-  const handleOnline = () => {
-    console.log("Internet back → syncing...");
-    syncMilkData();
-  };
+    const handleOnline = () => {
+      console.log("Internet back → syncing...");
+      syncMilkData();
+    };
 
-  window.addEventListener("online", handleOnline);
+    window.addEventListener("online", handleOnline);
 
-  return () => {
-    window.removeEventListener("online", handleOnline);
-  };
-}, []);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
   return (
     <Suspense
       fallback={
@@ -67,7 +70,10 @@ const App: React.FC = () => {
         {/* Redirect root → dashboard */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        <Route element={<MainLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+
+
+        <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
           {/* Dashboard */}
           <Route path="/dashboard" element={<DashboardPage />} />
 

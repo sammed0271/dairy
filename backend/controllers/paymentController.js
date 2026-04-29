@@ -79,6 +79,7 @@ export const payBill = async (req, res) => {
     const payout = payoutRes.data;
 
     await Payment.create({
+      centerId: req.user.centerId,
       farmerId: bill.farmerId,
       billId: bill._id,
       amount: bill.netPayable,
@@ -139,7 +140,7 @@ export const razorpayWebhook = async (req, res) => {
 
 export const payAllBills = async (req, res) => {
   try {
-    const bills = await Bill.find({ status: "Pending" });
+    const bills = await Bill.find({ centerID: req.user.centerId, status: "Pending" });
 
     if (!bills.length) {
       return res.json({
@@ -218,6 +219,7 @@ export const payAllBills = async (req, res) => {
         const payout = payoutRes.data;
 
         await Payment.create({
+          centerId: req.user.centerId,
           farmerId: bill.farmerId,
           billId: bill._id,
           amount: bill.netPayable,

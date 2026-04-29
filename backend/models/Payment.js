@@ -13,6 +13,12 @@ import mongoose from "mongoose";
 // });
 
 const paymentSchema = new mongoose.Schema({
+  centerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Center",
+    required: true,
+    index: true,
+  },
   farmerId: mongoose.Schema.Types.ObjectId,
   billId: mongoose.Schema.Types.ObjectId,
 

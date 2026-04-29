@@ -1,6 +1,7 @@
 import express from "express";
 import { getInventoryTransactions, payInstallment, sellInventoryToFarmer } from "../controllers/inventory_transaction_controller.js";
 
+
 const router = express.Router();
 
 router.post("/sell", sellInventoryToFarmer);

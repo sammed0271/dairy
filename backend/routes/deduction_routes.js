@@ -1,5 +1,4 @@
 import express from "express";
-import { protect } from "../middleware/auth_middleware.js";
 import { addDeduction, getDeductions, deleteDeduction, adjustDeduction, clearDeduction } from "../controllers/deduction_controller.js";
 
 const router = express.Router();

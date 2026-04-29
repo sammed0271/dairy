@@ -15,6 +15,7 @@ export const previewBonus = async (req, res) => {
     }
 
     const milkList = await Milk.find({
+      centerId: req.user.centerId,
       date: { $gte: periodFrom, $lte: periodTo },
     }).populate("farmerId", "name code");
 
@@ -68,7 +69,7 @@ export const previewBonus = async (req, res) => {
 
 export const addBonus = async (req, res) => {
   try {
-    const bonus = await Bonus.create(req.body);
+    const bonus = await Bonus.create({ ...req.body, centerId: req.user.centerId });
     res.status(201).json(bonus);
   } catch (err) {
     res.status(500).json({ message: err.message });

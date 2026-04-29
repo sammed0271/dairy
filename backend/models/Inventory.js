@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const inventorySchema = new mongoose.Schema(
   {
+    centerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Center",
+      required: true,
+    },
     code: {
       type: String,
       required: true,

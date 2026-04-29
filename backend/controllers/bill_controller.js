@@ -6,7 +6,7 @@ import InventoryTransaction from "../models/InventoryTransaction.js";
 
 export const getBills = async (req, res) => {
   try {
-    const bills = await Bill.find()
+    const bills = await Bill.find({ centerId: req.user.centerId, })
       .populate("farmerId", "name code")
       .sort({ createdAt: -1 });
 
@@ -118,6 +118,7 @@ export const generateBill = async (req, res) => {
     netPayable += carryForwardAmount;
 
     const bill = await Bill.create({
+      centerId: req.user.centerId,
       farmerId,
       periodFrom,
       periodTo,
@@ -133,6 +134,7 @@ export const generateBill = async (req, res) => {
 
     await InventoryTransaction.updateMany(
       {
+        centerId: req.user.centerId,
         farmerId,
         remainingAmount: { $gt: 0 },
         paymentMethod: { $ne: "Cash" },
@@ -325,7 +327,7 @@ export const getBillDetails = async (req, res) => {
         amount: b.amount,
       })),
     });
-  } catch (err) { 
+  } catch (err) {
     console.error("getBillDetails error:", err);
     res.status(500).json({ message: err.message });
   }
