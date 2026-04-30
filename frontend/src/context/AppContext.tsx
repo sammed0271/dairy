@@ -1,186 +1,96 @@
-// src/context/AppContext.tsx
-import React, { createContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { api } from "../axios/axiosInstance";
+import { loginUser } from "../axios/auth_api";
 
-import type { Farmer, FarmerMilkType, MilkType } from "../types/farmer";
-import type { MilkCollection, MilkShift } from "../types/milkCollection";
-import type { Deduction, DeductionCategory } from "../types/deduction";
-
-import { addFarmer as addFarmerAPI, getFarmers } from "../axios/farmer_api";
-import {
-  addMilkEntry as addMilkEntryAPI,
-  getMilkEntries,
-} from "../axios/milk_api";
-import {
-  addDeduction as addDeductionAPI,
-  getDeductions,
-} from "../axios/deduction_api";
-
-type AppState = {
-  initialized: boolean;
-  farmers: Farmer[];
-  milkCollections: MilkCollection[];
-  deductions: Deduction[];
-};
-
-type AddFarmerInput = {
+type User = {
+  _id: string;
   name: string;
-  mobile: string;
-  // milkType: MilkType;
-  milkType:FarmerMilkType;
-  address?: string;
+  email: string;
+  role: string;
+  centerId?: string | null;
 };
 
-type AddMilkCollectionInput = {
-  date: string;
-  shift: MilkShift;
-  farmerId: string;
-  milkType: MilkType;
-  liters: number;
-  fat: number;
-  snf: number;
-  rate: number;
-  remarks?: string;
-};
-
-type AddDeductionInput = {
-  date: string;
-  farmerId: string;
-  category: DeductionCategory;
-  amount: number;
-  description?: string;
-};
-
-export type AppContextValue = AppState & {
-  addFarmer: (input: AddFarmerInput) => Promise<void>;
-  addMilkCollection: (input: AddMilkCollectionInput) => Promise<void>;
-  addDeduction: (input: AddDeductionInput) => Promise<void>;
-  reloadAll: () => Promise<void>;
+type AppContextValue = {
+  user: User | null;
+  token: string | null;
   loading: boolean;
+  login: (email: string, password: string) => Promise<User>;
+  logout: () => void;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
 };
 
-const AppContext = createContext<AppContextValue | undefined>(undefined);
+export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const [state, setState] = useState<AppState>({
-    initialized: false,
-    farmers: [],
-    milkCollections: [],
-    deductions: [],
-  });
+export const AppProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] = useState(false);
-
-  // Load all data from backend
-  const reloadAll = async () => {
-    try {
-      setLoading(true);
-
-      const [farmersRes, milkRes, deductionRes] = await Promise.all([
-        getFarmers(),
-        getMilkEntries(),
-        getDeductions(),
-      ]);
-
-      setState({
-        initialized: true,
-        farmers: farmersRes.data,
-        milkCollections: milkRes.data,
-        deductions: deductionRes.data,
-      });
-    } catch (error) {
-      console.error("Error loading app data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // 🔁 Restore session
   useEffect(() => {
-    reloadAll();
+    const storedUser = localStorage.getItem("user");
+    const storedToken = localStorage.getItem("token");
+
+    if (storedUser && storedToken) {
+      const parsedUser = JSON.parse(storedUser);
+
+      setUser(parsedUser);
+      setToken(storedToken);
+
+      api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
+    }
+
+    setLoading(false);
   }, []);
 
-  // Add farmer
-  const addFarmer = async (input: AddFarmerInput): Promise<void> => {
-    try {
-      setLoading(true);
+  // 🔐 LOGIN
+  const login = async (email: string, password: string) => {
+    const res = await loginUser({ email, password });
 
-      await addFarmerAPI({
-        name: input.name.trim(),
-        mobile: input.mobile.trim(),
-        milkType: input.milkType,
-        address: input.address?.trim() || undefined,
-      });
+    const { token, user } = res.data;
 
-      await reloadAll();
-    } catch (error) {
-      console.error("Error adding farmer:", error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+    setUser(user);
+    setToken(token);
+
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("token", token);
+
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+    return user;
   };
 
-  // Add milk collection
-  const addMilkCollection = async (
-    input: AddMilkCollectionInput,
-  ): Promise<void> => {
-    try {
-      setLoading(true);
+  // 🚪 LOGOUT
+  const logout = () => {
+    setUser(null);
+    setToken(null);
 
-      await addMilkEntryAPI({
-        date: input.date,
-        shift: input.shift,
-        farmerId: input.farmerId,
-        milkType: input.milkType,
-        quantity: input.liters,
-        fat: input.fat,
-        snf: input.snf,
-        rate: input.rate,
-      });
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
 
-      await reloadAll();
-    } catch (error) {
-      console.error("Error adding milk entry:", error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+    delete api.defaults.headers.common["Authorization"];
   };
 
-  // Add deduction
-  const addDeduction = async (input: AddDeductionInput): Promise<void> => {
-    try {
-      setLoading(true);
-
-      await addDeductionAPI({
-        date: input.date,
-        farmerId: input.farmerId,
-        category: input.category,
-        amount: input.amount,
-        description: input.description?.trim() || undefined,
-      });
-
-      await reloadAll();
-    } catch (error) {
-      console.error("Error adding deduction:", error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const value: AppContextValue = {
-    ...state,
-    addFarmer,
-    addMilkCollection,
-    addDeduction,
-    reloadAll,
-    loading,
-  };
-
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        logout,
+        isAdmin: user?.role === "admin",
+        isSuperAdmin: user?.role === "superadmin",
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
 };
 
-// Hook to use context
-export { AppContext };
+export const useAppContext = () => {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useAppContext must be used inside AppProvider");
+  return ctx;
+};

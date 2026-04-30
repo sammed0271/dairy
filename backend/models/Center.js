@@ -14,7 +14,7 @@ const centerSchema = new mongoose.Schema(
     code: {
       type: String,
       required: true,
-      unique: true,
+
       uppercase: true,
       trim: true,
       match: [/^C\d{3}$/, "Code must be like C001"],

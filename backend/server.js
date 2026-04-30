@@ -24,6 +24,8 @@ import machineRoutes from "./routes/machineRoutes.js";
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 import healthRoutes from "./routes/health.js";
+
+import centerRoutes from "./routes/center_routes.js";
 const app = express();
 
 app.use(express.json());
@@ -55,7 +57,10 @@ app.use("/api/inventory-transactions", protect, inventoryTransactionRoutes);
 app.use("/api/payments", protect, paymentRoutes);
 app.use("/api/sales", protect, saleRoutes);
 app.use("/api/machine", machineRoutes);
+
 app.use("/api", healthRoutes);
+
+app.use("/api/centers", centerRoutes);
 
 const PORT = process.env.PORT;
 

@@ -6,9 +6,9 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import "./App.css";
 import App from "./App";
-import { FarmerProvider } from "./context/FarmerContext";
 import { Toaster } from "react-hot-toast";
 import { NetworkProvider } from "./context/NetworkContext";
+import { AppProvider } from "./context/AppContext";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <>
@@ -35,11 +35,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     />
     <React.StrictMode>
       <BrowserRouter>
-        <NetworkProvider>
-          <FarmerProvider>
+        <AppProvider>
+          <NetworkProvider>
             <App />
-          </FarmerProvider>
-        </NetworkProvider>
+          </NetworkProvider>
+        </AppProvider>
       </BrowserRouter>
     </React.StrictMode>
   </>,

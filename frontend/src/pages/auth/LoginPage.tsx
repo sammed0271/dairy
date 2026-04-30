@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import InputField from "../../components/inputField";
-import { loginUser } from "../../axios/auth_api";
+// import { loginUser } from "../../axios/auth_api";
+import { useAppContext } from "../../context/AppContext";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { login } = useAppContext();
 
   const handleLogin = async () => {
 
@@ -23,14 +26,14 @@ const LoginPage: React.FC = () => {
 
     try {
       setLoading(true);
-      const res = await loginUser({ email, password });
+      // const res = await loginUser({ email, password });
+      const user = await login(email, password);
 
-      const { token } = res.data;
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      console.log("Login successful:", res.data);
-
-      navigate("/dashboard");
+      if (user.role === "superadmin") {
+        navigate("/sa/dashboard");
+      } else {
+        navigate("/dashboard");
+      }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
       setError("Invalid email or password ");
