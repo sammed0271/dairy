@@ -1,0 +1,11 @@
+import express from "express";
+import { getSuperadminDashboard } from "../controllers/superadmin_dashboard_controller.js";
+import { protect } from "../middleware/auth_middleware.js";
+import { adminOnly } from "../middleware/adminOnly.js";
+
+const router = express.Router();
+
+// GET /api/superadmin/dashboard?from=YYYY-MM-DD&to=YYYY-MM-DD
+router.get("/", protect, getSuperadminDashboard);
+
+export default router;

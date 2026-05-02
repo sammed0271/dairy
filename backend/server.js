@@ -27,6 +27,7 @@ import healthRoutes from "./routes/health.js";
 
 import centerRoutes from "./routes/center_routes.js";
 import userRoutes from "./routes/user_routes.js";
+import { getSuperadminDashboard } from "./controllers/superadmindashboards.js";
 const app = express();
 
 app.use(express.json());
@@ -75,6 +76,7 @@ app.use("/api/machine", machineRoutes);
 
 app.use("/api", healthRoutes);
 
+app.use("/api/superadmin/dashboard", getSuperadminDashboard);
 app.use("/api/centers", centerRoutes);
 app.use("/api/users", userRoutes);
 const PORT = process.env.PORT;
