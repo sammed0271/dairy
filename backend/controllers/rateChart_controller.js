@@ -196,7 +196,7 @@ export const updateRateChart = async (req, res) => {
       centerId: req.user.centerId,
       milkType,
       effectiveFrom,
-      savedBy: req.user?._id || null,
+      savedBy: req.user?.id || null,
       createdAt: new Date(),
     });
 

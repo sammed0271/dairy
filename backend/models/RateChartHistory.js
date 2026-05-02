@@ -18,7 +18,7 @@ const rateChartHistorySchema = new mongoose.Schema(
     // fatFactor: Number,
     // snfFactor: Number,
 
-    savedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    savedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
   },
   { timestamps: true },
 );

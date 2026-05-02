@@ -4,6 +4,7 @@ import MainLayout from "../layout/superadmin/mainLayout";
 import SettingsPage from "../pages/superadmin/settings/settings";
 import FallBackPage from "../pages/fallback";
 import AddUserPage from "../pages/superadmin/settings/adduser";
+import SuperadminRateChart from "../pages/superadmin/Ratechart/ratechart";
 
 
 const DashboardPage = lazy(() => import("../pages/superadmin/dashboard/dashboard"));
@@ -20,6 +21,7 @@ export default function SuperadminRoutes() {
         <Route path="/centers" element={<CentersPage />} />
         <Route path="/centers/new" element={<AddCenterPage />} />
         <Route path="/centers/:id" element={<CenterDetails />} />
+        <Route path="/rate-chart" element={<SuperadminRateChart />} />
 
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/users/new" element={<AddUserPage />} />

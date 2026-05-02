@@ -1,5 +1,5 @@
 import express from "express";
-import { getSuperadminDashboard } from "../controllers/superadmin_dashboard_controller.js";
+import { getSuperadminDashboard } from "../controllers/superadmindashboards.js";
 import { protect } from "../middleware/auth_middleware.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 
