@@ -191,7 +191,7 @@ export const updateRateChartForCenter = async (req, res) => {
           updatedAt: new Date().toISOString(),
         },
       },
-      { new: true, upsert: true },
+      { new: true, upsert: true, runValidators: true, },
     );
 
     return res.json({ message: `${milkType} rate chart saved`, chart });

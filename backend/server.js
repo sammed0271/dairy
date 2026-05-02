@@ -29,6 +29,7 @@ import centerRoutes from "./routes/center_routes.js";
 import userRoutes from "./routes/user_routes.js";
 import superadminDashboardRoutes from "./routes/superadmin_dashboard_routes.js"
 import superadminRatechartRoutes from "./routes/superadmin_ratechart_routes.js";
+import superadminReportRoutes from "./routes/superadmin_report_routes.js"
 const app = express();
 
 app.use(express.json());
@@ -79,6 +80,7 @@ app.use("/api", healthRoutes);
 
 app.use("/api/superadmin/dashboard", superadminDashboardRoutes);
 app.use("/api/superadmin/rate-charts", protect, superadminRatechartRoutes);
+app.use("/api/superadmin/reports", protect, superadminReportRoutes);
 app.use("/api/centers", centerRoutes);
 app.use("/api/users", userRoutes);
 const PORT = process.env.PORT;
