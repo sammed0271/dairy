@@ -4,7 +4,7 @@ import {
   getRateChartsForCenter,
   updateRateChartForCenter,
   getRateChartHistory,
-} from "../controllers/superadmin_rateChart_controller.js";
+} from "../controllers/superadmin_ratechart_controller.js";
 import { protect } from "../middleware/auth_middleware.js";
 
 const router = express.Router();
