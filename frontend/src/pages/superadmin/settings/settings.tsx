@@ -28,9 +28,6 @@ export default function SettingsPage() {
 
   const handleAssign = async (userId: string, centerId: string) => {
     // optimistic update
-
-
-
     try {
       const res = await assignCentertoUser(userId, centerId);
       setUsers((prev) =>
@@ -38,13 +35,10 @@ export default function SettingsPage() {
           u._id === userId
             ?
             res.data.user
-
             : u
         )
       );
-      console.log("inside assign :::", users);
       setEditingUserId(null);
-      console.log("Assigned :: ", res.data);
     } catch (err) {
       console.error(err);
     }

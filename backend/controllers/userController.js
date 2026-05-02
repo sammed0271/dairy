@@ -1,24 +1,32 @@
 import User from "../models/User.js";
 import Center from "../models/Center.js"
 import mongoose from "mongoose";
+import bcrypt from "bcrypt"
 
 export const createUser = async (req, res) => {
   try {
     const data = req.body;
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+
+    if (!data.name || !data.email || !data.password || !data.role) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(data.password, salt);
+
     const user = await User.create({
       name: data.name,
       email: data.email,
-      password: hashedPassword,
-      role: data.role,
-      centerId: center._id,
+      password: hashed,
+      centerId: data.centerId,
     });
 
     res.status(201).json(user);
   } catch (err) {
     if (err.code === 11000) {
       return res.status(400).json({
-        message: "Center code already exists",
+        message: "User already exists",
       });
     }
     console.log("error message : ", err.message);
