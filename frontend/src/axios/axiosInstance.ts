@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const api = axios.create({
   // import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "https://w3058xp8-5000.inc1.devtunnels.ms/api",
   withCredentials: true,
   headers: {
     "Cache-Control": "no-cache", // ✅ ADD THIS

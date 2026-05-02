@@ -1,10 +1,15 @@
 import { lazy } from "react";
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import MainLayout from "../layout/superadmin/mainLayout";
+import SettingsPage from "../pages/superadmin/settings/settings";
+import FallBackPage from "../pages/fallback";
+import AddUserPage from "../pages/superadmin/settings/adduser";
 
 
 const DashboardPage = lazy(() => import("../pages/superadmin/dashboard/dashboard"));
 const CentersPage = lazy(() => import("../pages/superadmin/center/center"));
+const CenterDetails = lazy(() => import("../pages/superadmin/center/centerDetails"));
+const AddCenterPage = lazy(() => import("../pages/superadmin/center/addCenter"));
 
 
 export default function SuperadminRoutes() {
@@ -13,7 +18,17 @@ export default function SuperadminRoutes() {
       <Route element={<MainLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/centers" element={<CentersPage />} />
+        <Route path="/centers/new" element={<AddCenterPage />} />
+        <Route path="/centers/:id" element={<CenterDetails />} />
+
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/users/new" element={<AddUserPage />} />
       </Route>
+      {/* 404 */}
+      <Route
+        path="*"
+        element={<FallBackPage />}
+      />
     </Routes>
 
   );

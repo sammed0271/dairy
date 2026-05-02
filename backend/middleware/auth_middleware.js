@@ -18,12 +18,19 @@ export const protect = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
-
-    req.user = {
-      id: user._id,
-      role: user.role,
-      centerId: user.centerId,
-    };
+    if (user.role === "superadmin") {
+      req.user = {
+        id: user._id,
+        role: user.role
+      };
+    }
+    else {
+      req.user = {
+        id: user._id,
+        role: user.role,
+        centerId: user.centerId,
+      };
+    }
 
     next();
   } catch (err) {

@@ -3,9 +3,12 @@ import {
   createCenter,
   getCenters,
   getCenterById,
-  updateCenter,
-  toggleCenterStatus,
-  getCenterFullDetails,
+  // updateCenter,
+  toggleCenter,
+  // getCenterFullDetails,
+  getDailyMilkTrend,
+  getFatSnfStats,
+  getCenterPerformance,
 } from "../controllers/center_controller.js";
 
 import { protect } from "../middleware/auth_middleware.js";
@@ -13,11 +16,17 @@ import { protect } from "../middleware/auth_middleware.js";
 const router = express.Router();
 
 // 🔐 Superadmin routes
-router.post("/", createCenter);
 router.get("/", getCenters);
+router.post("/", createCenter);
+router.put("/:id/toggle", toggleCenter);
 router.get("/:id", getCenterById);
-router.put("/:id", updateCenter);
-router.patch("/:id/toggle", toggleCenterStatus);
-router.get("/:centerId/full", getCenterFullDetails);
+
+router.get("/:id/daily-milk-trend", getDailyMilkTrend);
+router.get("/:id/fat-snf-stats", getFatSnfStats);
+router.get("/:id/performance", getCenterPerformance);
+
+
+// router.put("/:id", updateCenter);
+// router.get("/:centerId/full", getCenterFullDetails);
 
 export default router;

@@ -9,6 +9,10 @@ export default function Dashboard() {
 
       <p>dashboard</p>
 
+      {/* <div className="mt-6 w-1/2 p-6 bg-white rounded-xl shadow-sm border">
+        <CenterPerformanceChart data={performanceData} />
+      </div> */}
+
     </div>
   );
 }

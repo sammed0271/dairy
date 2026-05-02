@@ -14,11 +14,12 @@ const centerSchema = new mongoose.Schema(
     code: {
       type: String,
       required: true,
-
+      unique: true,
       uppercase: true,
       trim: true,
       match: [/^C\d{3}$/, "Code must be like C001"],
     },
+
 
     ownerName: {
       type: String,
@@ -48,19 +49,7 @@ const centerSchema = new mongoose.Schema(
     longitude: Number,
 
     // 🔹 Login
-    username: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
 
-    password: {
-      type: String,
-      required: true,
-      minlength: 6, // 🔥 enforce minimum security
-    },
 
     status: {
       type: String,
@@ -68,10 +57,15 @@ const centerSchema = new mongoose.Schema(
       default: "Active",
       index: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
 
     // 🔹 Business Config
     milkType: {
-      type: String,
+      type: [String],
       enum: ["cow", "buffalo", "mix"],
       required: true,
     },
@@ -95,14 +89,14 @@ const centerSchema = new mongoose.Schema(
 
     shift: {
       type: String,
-      enum: ["morning", "evening", "both"], // 🔥 fixed
+      enum: ["Morning", "Evening", "Both"], // 🔥 fixed
       default: "both",
     },
 
     // 🔹 Payment
     paymentCycle: {
       type: String,
-      enum: ["daily", "weekly", "monthly"],
+      enum: ["daily", "weekly", "monthly", "10days"],
       default: "weekly",
     },
 
@@ -127,7 +121,7 @@ const centerSchema = new mongoose.Schema(
 );
 
 // 🔥 Indexes for performance
-centerSchema.index({ code: 1 });
+
 centerSchema.index({ name: 1 });
 
 
