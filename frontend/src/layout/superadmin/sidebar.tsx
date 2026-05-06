@@ -1,18 +1,14 @@
 // src/layout/Sidebar.tsx
 import React, { useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 
 // type Props = {
 //   isOpen: boolean;
 //   onClose: () => void;
 // };
-const handleLogout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
 
-  navigate("/login");
-};
+
 interface SidebarProps {
   open: boolean;
   setOpen: (v: boolean) => void;
@@ -135,6 +131,7 @@ const SettingsIcon = () => (
 );
 
 const SuperAdminSidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
+  const navigate = useNavigate();
   const [dateTime, setDateTime] = useState(new Date());
   const location = useLocation();
   const { user } = useAppContext();
@@ -150,6 +147,13 @@ const SuperAdminSidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
       setOpen(false);
     }
   }, [location.pathname, setOpen]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    navigate("/login");
+  };
 
   const formatDate = (d: Date) =>
     d.toLocaleDateString("en-GB", {
@@ -274,10 +278,10 @@ const SuperAdminSidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
               </p>
               <p className="text-xs text-slate-500">Super Admin</p>
             </div>
-            <button 
-              onClick={handleLogout} 
+            <button
+              onClick={handleLogout}
               className="rounded-lg p-2 transition hover:bg-slate-100"
-              >
+            >
               <svg
                 className="h-4 w-4 text-slate-400"
                 viewBox="0 0 24 24"

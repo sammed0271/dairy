@@ -49,6 +49,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const res = await loginUser({ email, password });
 
     const { token, user } = res.data;
+    console.log("login data:", res.data);
 
     setUser(user);
     setToken(token);

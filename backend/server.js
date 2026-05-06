@@ -39,7 +39,7 @@ app.use(cookieParser());
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
 app.use(cors({
-  origin: "https://dairy-mauve.vercel.app",
+  origin: allowedOrigins || "https://dairy-mauve.vercel.app",
   // methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));

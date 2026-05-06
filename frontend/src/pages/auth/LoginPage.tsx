@@ -35,8 +35,11 @@ const LoginPage: React.FC = () => {
         navigate("/dashboard");
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
-      setError("Invalid email or password ");
+    } catch (err: any) {
+      // If the server provides a specific message (e.g., { message: "Database down" }), show it
+      const message = err.response?.data?.message || "An internal server error occurred. Please try again later.";
+      setError(message);
+      console.error("Login Failed:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }

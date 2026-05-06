@@ -73,6 +73,44 @@ export const getUsers = async (req, res) => {
   }
 };
 
+export const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { name, email, role, password } = req.body;
+
+    const updateData = {
+      name,
+      email,
+      role,
+    };
+
+    // optional password update
+    if (password && password.trim() !== "") {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+};
+
 export const assignCenterToUser = async (req, res) => {
   try {
     const { userId } = req.params;

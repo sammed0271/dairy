@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../../axios/axiosInstance";
 import { getCenters } from "../../../axios/center_api";
 import { assignCentertoUser, getUsers } from "../../../axios/user_api";
+import EditUserModal from "./EditUserModal";
 
 import { useNavigate } from "react-router-dom";
 
@@ -10,6 +11,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [centers, setCenters] = useState<any[]>([]);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -59,7 +61,7 @@ export default function SettingsPage() {
           onClick={() => navigate("/sa/users/new")}
           className="flex items-center gap-2 px-6 py-2.5 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
         >
-          <span className="text-xl">+</span> Add Center
+          <span className="text-xl">+</span> Add User
         </button>
       </div>
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -145,21 +147,48 @@ export default function SettingsPage() {
 
                 {/* ACTIONS */}
                 <td className="text-right pr-4">
-                  <button
-                    onClick={() => handleDelete(u._id)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    Delete
-                  </button>
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setEditingUser(u)}
+                      className="text-blue-500 hover:text-blue-700"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(u._id)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {editingUser && (
+          <EditUserModal
+            user={editingUser}
+            onClose={() => setEditingUser(null)}
+            onSuccess={(updatedUser: any) => {
+              setUsers((prev) =>
+                prev.map((u) =>
+                  u._id === updatedUser._id
+                    ? updatedUser
+                    : u
+                )
+              );
+            }}
+          />
+        )}
       </div>
     </div>
+
   );
 }
+
 
 function Avatar({ name }: any) {
   return (
