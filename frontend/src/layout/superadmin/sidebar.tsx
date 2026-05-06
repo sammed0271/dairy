@@ -7,6 +7,12 @@ import { useAppContext } from "../../context/AppContext";
 //   isOpen: boolean;
 //   onClose: () => void;
 // };
+const handleLogout = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+
+  navigate("/login");
+};
 interface SidebarProps {
   open: boolean;
   setOpen: (v: boolean) => void;
@@ -268,7 +274,10 @@ const SuperAdminSidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
               </p>
               <p className="text-xs text-slate-500">Super Admin</p>
             </div>
-            <button className="rounded-lg p-2 transition hover:bg-slate-100">
+            <button 
+              onClick={handleLogout} 
+              className="rounded-lg p-2 transition hover:bg-slate-100"
+              >
               <svg
                 className="h-4 w-4 text-slate-400"
                 viewBox="0 0 24 24"
