@@ -107,20 +107,41 @@ export const getCenterById = async (req, res) => {
 
 /* ================= CREATE CENTER ================= */
 export const createCenter = async (req, res) => {
+  console.log("__________________________create center__________________________start");
+  console.log(req.originalUrl);
   try {
+    console.log(req.body);
+    const { milkType } = req.body;
+    console.log(milkType);
+    const lastCenter = await Center.findOne()
+      .sort({ createdAt: -1 })
+      .select("code");
+
+    let nextCode = "C005";
+
+    if (lastCenter?.code) {
+      const lastNumber = parseInt(lastCenter.code.replace("C", ""));
+      nextCode = `C${String(lastNumber + 2).padStart(3, "0")}`;
+    }
+    console.log("nextcode: ", nextCode);
+
     const center = await Center.create({
       ...req.body,
+      code: nextCode,
       createdBy: req.user?.id,
     });
+    console.log("center created :", center);
 
+    console.log("__________________________update user__________________________end");
     res.status(201).json(center);
   } catch (err) {
+    console.log("error message : ", err.message);
     if (err.code === 11000) {
       return res.status(400).json({
         message: "Center code already exists",
       });
     }
-    console.log("error message : ", err.message);
+
     res.status(500).json({ message: err.message });
   }
 };

@@ -59,7 +59,7 @@ export const loginUser = async (req, res) => {
         centerId: user.centerId || null,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "7d", }
+      { expiresIn: "7h", }
     );
 
     return res.status(200).json({

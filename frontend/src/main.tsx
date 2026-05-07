@@ -33,14 +33,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         },
       }}
     />
-    <React.StrictMode>
-      <BrowserRouter>
-        <AppProvider>
-          <NetworkProvider>
-            <App />
-          </NetworkProvider>
-        </AppProvider>
-      </BrowserRouter>
-    </React.StrictMode>
+    {/* <React.StrictMode> */}
+    <BrowserRouter>
+      <AppProvider>
+        <NetworkProvider>
+          <App />
+        </NetworkProvider>
+      </AppProvider>
+    </BrowserRouter>
+    {/* </React.StrictMode> */}
   </>,
 );

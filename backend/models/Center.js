@@ -55,7 +55,7 @@ const centerSchema = new mongoose.Schema(
       type: String,
       enum: ["Active", "Suspended"],
       default: "Active",
-      index: true,
+
     },
     isActive: {
       type: Boolean,
@@ -89,7 +89,7 @@ const centerSchema = new mongoose.Schema(
 
     shift: {
       type: String,
-      enum: ["Morning", "Evening", "Both"], // 🔥 fixed
+      enum: ["Morning", "Evening", "both"], // 🔥 fixed
       default: "both",
     },
 

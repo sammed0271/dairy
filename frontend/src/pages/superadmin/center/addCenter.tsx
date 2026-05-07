@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowLeft } from "lucide-react"; // Assuming lucide-react is installed
 import { createCenter } from "../../../axios/center_api";
+import toast from "react-hot-toast";
 
 export default function AddCenterPage() {
   const navigate = useNavigate();
@@ -10,7 +11,6 @@ export default function AddCenterPage() {
 
   const [form, setForm] = useState({
     name: "",
-    code: "",
     ownerName: "",
     mobile: "",
     village: "",
@@ -25,7 +25,7 @@ export default function AddCenterPage() {
     rateType: "",
     unit: "liter",
     defaultRate: "",
-    shift: "Both",
+    shift: "both",
     paymentCycle: "weekly",
     paymentMode: "cash",
     commission: "0",
@@ -50,7 +50,6 @@ export default function AddCenterPage() {
 
     // Required Fields Validation
     if (!form.name.trim()) newErrors.name = "Center name is required";
-    if (!form.code.trim()) newErrors.code = "Center code is required";
     if (!form.ownerName.trim()) newErrors.ownerName = "Owner name is required";
 
     // Mobile Validation
@@ -72,15 +71,19 @@ export default function AddCenterPage() {
 
     setLoading(true);
     try {
-      await createCenter(form);
+      const res = await createCenter({
+        ...form,
+        milkType: [form.milkType],
+      });
+      console.log('Success:', res.data);
       navigate("/centers");
     } catch (err) {
-      console.error(err);
-      alert("Failed to create center. Please try again.");
+      toast.error("Failed to create center. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
@@ -103,7 +106,6 @@ export default function AddCenterPage() {
         <FormSection title="Basic Details">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Input label="Center Name *" name="name" onChange={handleChange} error={errors.name} />
-            <Input label="Code * (e.g. C001)" name="code" placeholder="C001" onChange={handleChange} error={errors.code} />
             <Input label="Owner Name *" name="ownerName" onChange={handleChange} error={errors.ownerName} />
             <Input label="Mobile * (10 digits)" name="mobile" onChange={handleChange} error={errors.mobile} />
           </div>
@@ -151,9 +153,9 @@ export default function AddCenterPage() {
             </Select>
             <Input label="Default Rate" name="defaultRate" onChange={handleChange} />
             <Select label="Shift" name="shift" onChange={handleChange} defaultValue="Both">
-              <option value="Both">Both</option>
-              <option value="Morning">Morning</option>
-              <option value="Evening">Evening</option>
+              <option value="both">Both</option>
+              <option value="morning">Morning</option>
+              <option value="evening">Evening</option>
             </Select>
           </div>
         </FormSection>
@@ -187,6 +189,7 @@ export default function AddCenterPage() {
             Cancel
           </button>
           <button
+            disabled={loading}
             onClick={() => handleSubmit()}
             className="px-8 py-2 bg-[#3b82f6] text-white font-bold rounded-lg hover:bg-blue-600 transition-all shadow-md"
           >

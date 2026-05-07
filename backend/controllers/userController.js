@@ -77,11 +77,13 @@ export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { name, email, role, password } = req.body;
+    const { name, email, mobile, role, password } = req.body;
+
 
     const updateData = {
       name,
       email,
+      mobile,
       role,
     };
 

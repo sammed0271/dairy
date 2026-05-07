@@ -33,6 +33,10 @@ import superadminReportRoutes from "./routes/superadmin_report_routes.js"
 import superadminQualityRoutes from "./routes/superadmin_quality_routes.js"
 const app = express();
 
+app.use((req, res, next) => {
+  console.log(req.method, req.originalUrl, "\n______________________________________________\n");
+  next();
+});
 app.use(express.json());
 app.use(cookieParser());
 
@@ -71,12 +75,12 @@ app.use("/api/machine", machineRoutes);
 
 app.use("/api", healthRoutes);
 
-app.use("/api/superadmin/dashboard", superadminDashboardRoutes);
+app.use("/api/superadmin/dashboard", protect, superadminDashboardRoutes);
 app.use("/api/superadmin/rate-charts", protect, superadminRatechartRoutes);
 app.use("/api/superadmin/reports", protect, superadminReportRoutes);
 app.use("/api/superadmin/quality", protect, superadminQualityRoutes);
-app.use("/api/centers", centerRoutes);
-app.use("/api/users", userRoutes);
+app.use("/api/centers", protect, centerRoutes);
+app.use("/api/users", protect, userRoutes);
 const PORT = process.env.PORT;
 
 app.listen(PORT, () => {

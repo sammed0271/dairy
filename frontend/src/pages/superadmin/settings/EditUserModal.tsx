@@ -189,8 +189,8 @@ export default function EditUserModal({
               disabled={isSuperAdmin}
               className="w-full px-3 py-2 border rounded-lg"
             >
+              <option value="superadmin">SuperAdmin</option>
               <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
             </select>
           </div>
 
